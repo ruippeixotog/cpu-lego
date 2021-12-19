@@ -2,17 +2,35 @@ package util
 
 import scala.annotation.targetName
 
+import component.BuilderDSL._
 import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
+import simulator.{Sim, SimState}
 
 class BaseSpec extends Specification with ScalaCheck {
+
+  // --- ScalaCheck generators ---
 
   val genLogicLevel: Gen[LogicLevel] = Gen.oneOf(High, Low)
 
   given Arbitrary[LogicLevel] = Arbitrary(genLogicLevel)
+
+  // --- Utility methods ---
+
+  def buildAndRun[A](buildFunc: BuilderEnv => A): (A, SimState) = {
+    val (res, comp) = buildComponent(buildFunc)
+    (res, Sim.runComponent(comp))
+  }
+
+  // --- Extension methods ---
+
+  extension [A](self: Seq[Option[A]]) {
+    def sequence: Option[Seq[A]] =
+      self.foldLeft[Option[List[A]]](Some(Nil)) { case (acc, x) => x.zip(acc).map(_ :: _) }
+  }
 
   extension (self: LogicLevel) {
     def toBool: Boolean = self match {

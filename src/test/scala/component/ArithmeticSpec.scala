@@ -15,45 +15,44 @@ class ArithmeticSpec extends util.BaseSpec {
   )
 
   "A fullAdder" should {
-    "compute an addition with carry correctly" in forAll { (sig1: LogicLevel, sig2: LogicLevel, sig3: LogicLevel) =>
-      val ((out, carry), comp) = buildComponent { implicit env => fullAdder(sig1, sig2, sig3) }
-      val state = Sim.runComponent(comp)
-      
-      val expected = List(sig1, sig2, sig3).map(_.toInt).sum
+    "compute an addition with carry correctly" in forAll { (in1: LogicLevel, in2: LogicLevel, in3: LogicLevel) =>
+      val ((out, carry), state) = buildAndRun { implicit env => fullAdder(in1, in2, in3) }
 
+      val expected = List(in1, in2, in3).map(_.toInt).sum
       state.get(out) must beSome(expected % 2 == 1)
       state.get(carry) must beSome(expected / 2 == 1)
     }
   }
 
   "A binaryAdder" should {
-    "compute an addition correctly" in forAll { (sigs: List[(LogicLevel, LogicLevel)]) =>
-      val (sigs1, sigs2) = sigs.unzip
-      val ((outs, carry), comp) = buildComponent { implicit env => binaryAdder(sigs1, sigs2) }
-      val state = Sim.runComponent(comp)
+    "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+      val (in1, in2) = ins.unzip
+      val ((outs, carry), state) = buildAndRun { implicit env => binaryAdder(in1, in2) }
 
-      val outSigs = outs :+ carry
-      outSigs.map(state.get) must not(contain(None))
-      outSigs.flatMap(state.get).toUInt must beEqualTo(sigs1.toUInt + sigs2.toUInt)
+      (outs :+ carry).map(state.get).sequence must beSome.which { bools =>
+        bools.toUInt must beEqualTo(in1.toUInt + in2.toUInt)
+      }
     }
   }
 
   "An addSub" should {
-    "compute an addition correctly" in forAll { (sigs: List[(LogicLevel, LogicLevel)]) =>
-      val (sigs1, sigs2) = sigs.unzip
-      val (outs, comp) = buildComponent { implicit env => addSub(sigs1, sigs2, Low) }
-      val state = Sim.runComponent(comp)
 
-      outs.map(state.get) must not(contain(None))
-      outs.flatMap(state.get).toInt must beEqualTo(sigs1.toInt + sigs2.toInt)
+    "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+      val (in1, in2) = ins.unzip
+      val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, Low) }
+
+      outs.map(state.get).sequence must beSome.which { bools =>
+        bools.toInt must beEqualTo(in1.toInt + in2.toInt)
+      }
     }
-    "compute a subtraction correctly" in forAll { (sigs: List[(LogicLevel, LogicLevel)]) =>
-      val (sigs1, sigs2) = sigs.unzip
-      val (outs, comp) = buildComponent { implicit env => addSub(sigs1, sigs2, High) }
-      val state = Sim.runComponent(comp)
-      
-      outs.map(state.get) must not(contain(None))
-      outs.flatMap(state.get).toInt must beEqualTo(sigs1.toInt - sigs2.toInt)
+
+    "compute a subtraction correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+      val (in1, in2) = ins.unzip
+      val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, High) }
+
+      outs.map(state.get).sequence must beSome.which { bools =>
+        bools.toInt must beEqualTo(in1.toInt - in2.toInt)
+      }
     }
   }
 }

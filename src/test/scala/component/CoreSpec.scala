@@ -12,10 +12,9 @@ import simulator.{Circuit, Sim}
 class CoreSpec extends util.BaseSpec {
 
   "A NAND" should {
-    "compute !(a & b)" in forAll { (sig1: LogicLevel, sig2: LogicLevel) =>
-      val (out, comp) = buildComponent { implicit env => nand(sig1, sig2) }
-      val state = Sim.runComponent(comp)
-      state.get(out) must beSome(!(sig1.toBool && sig2.toBool))
+    "compute !(a & b)" in forAll { (in1: LogicLevel, in2: LogicLevel) =>
+      val (out, state) = buildAndRun { implicit env => nand(in1, in2) }
+      state.get(out) must beSome(!(in1.toBool && in2.toBool))
     }
   }
 
