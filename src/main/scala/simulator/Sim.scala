@@ -50,7 +50,13 @@ object Sim {
     c.components.foreach {
       case nand: NAND =>
         def propagate(v1o: Option[Boolean], v2o: Option[Boolean]): Unit = {
-          state.schedule(GateDelay, PortChange(nand.out, for { v1 <- v1o; v2 <- v2o } yield !(v1 && v2)))
+          val res = (v1o, v2o) match {
+            case (Some(false), _) => Some(true)
+            case (_, Some(false)) => Some(true)
+            case (Some(true), Some(true)) => Some(false)
+            case _ => None
+          }
+          state.schedule(GateDelay, PortChange(nand.out, res))
         }
         state.watch(nand.in1, v1o => propagate(v1o, state.get(nand.in2)))
         state.watch(nand.in2, v2o => propagate(state.get(nand.in1), v2o))

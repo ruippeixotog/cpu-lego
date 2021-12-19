@@ -44,6 +44,10 @@ class BaseSpec extends Specification with ScalaCheck {
     }
   }
 
+  extension (self: Option[LogicLevel]) {
+    def toPort: Port = self.getOrElse(new Port)
+  }
+
   extension (self: Seq[LogicLevel]) {
     def toUInt: Int = self.map(_.toBool).toUInt
     def toInt: Int = self.map(_.toBool).toInt
