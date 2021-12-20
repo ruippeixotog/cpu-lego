@@ -21,6 +21,7 @@ case class Circuit(components: List[BaseComponent], wires: List[(Port, Port)]) {
 object Sim {
   val GateDelay = 1
   val WireDelay = 1
+  val PosEdgeDelay = 5
 
   def runComponent(root: Component, maxTicks: Option[Int] = None): SimState = {
     runCircuit(build(root), maxTicks)
@@ -61,7 +62,7 @@ object Sim {
         state.watch(nand.in2, v2o => propagate(state.get(nand.in1), v2o))
 
       case clock: Clock =>
-        state.schedule(0, PortChange(clock.out, Some(false)))
+        state.schedule(0, PortChange(clock.out, Some(true)))
         state.watch(
           clock.out,
           v => state.schedule(clock.freq, PortChange(clock.out, v.map(!_)))
@@ -72,7 +73,7 @@ object Sim {
         state.watch(posEdge.in, {
           case Some(true) =>
             state.schedule(GateDelay, PortChange(posEdge.out, Some(true)))
-            state.schedule(GateDelay + 1, PortChange(posEdge.out, Some(false)))
+            state.schedule(GateDelay + PosEdgeDelay, PortChange(posEdge.out, Some(false)))
           case _ =>
             // do nothing
         })
@@ -81,8 +82,7 @@ object Sim {
   }
 
   def run(st: SimState, maxTicks: Option[Int] = None): SimState = {
-    // val sim = Runner(state, maxTicks)
-    // println("t=0: start simulation")
+    if(st.debug) println("t=0: start simulation")
 
     while (!st.events.isEmpty) {
       val (t1, evs) = st.events.head
@@ -92,7 +92,7 @@ object Sim {
       st.t = t1
 
       for (ev <- evs) {
-        // println(s"t=$t1: $ev")
+        if(st.debug) println(s"t=$t1: $ev")
 
         ev match {
           case PortChange(port, newValue) =>
@@ -139,6 +139,7 @@ class SimState(val c: Circuit) {
   var portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None)
   var portObservers: Map[Port, List[Option[Boolean] => Unit]] = Map().withDefaultValue(Nil)
   var groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
+  var debug: Boolean = false
 
   def get(port: Port): Option[Boolean] = {
     portValues(port).orElse(groupValues(c.groupOf(port)))

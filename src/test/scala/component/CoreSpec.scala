@@ -26,17 +26,17 @@ class CoreSpec extends util.BaseSpec {
 
   "A Clock" should {
 
-    "start at Low" in {
+    "start at High" in {
       val (out, comp) = buildComponent { implicit env => clock(100) }
       val state = Sim.runComponent(comp, Some(0))
-      state.get(out) must beSome(false)
+      state.get(out) must beSome(true)
     }
 
     "toggle its value according to its frequency" in {
       forAll(Gen.choose(10, 1000), Gen.choose(10, 1000)) { (freq, simEnd) =>
         val (out, comp) = buildComponent { implicit env => clock(freq) }
         val state = Sim.runComponent(comp, Some(simEnd))
-        state.get(out) must beSome((simEnd / freq) % 2 == 1)
+        state.get(out) must beSome((simEnd / freq) % 2 == 0)
       }
     }
   }
@@ -49,15 +49,13 @@ class CoreSpec extends util.BaseSpec {
     }
 
     "output High when the input changes from Low to High" in {
-      val (out, comp) = buildComponent { implicit env => posEdge(clock(5)) }
-      // expected delay from clock out to posEdge output
+      val (out, comp) = buildComponent { implicit env => posEdge(clock(50)) }
+      // expected delay from clock out to posEdge out
       val delay = Sim.WireDelay + Sim.GateDelay
       
-      var state = Sim.setup(Sim.build(comp))
-      foreach(0 to 25) { tick =>
-        state = Sim.runComponent(comp, Some(tick))
-        // Positive edge triggering for clock(5) occurs at t=5,15,25... 
-        state.get(out) must beSome((tick - 5) % 10 == delay)
+      runTickByTick(comp, 250) { (state, tick) =>
+        // Positive edge triggering for clock(50) occurs at t=0,100,200...
+        state.get(out) must beSome((tick - delay + 100) % 100 < Sim.PosEdgeDelay)
       }
     }
   }

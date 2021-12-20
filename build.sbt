@@ -8,3 +8,13 @@ libraryDependencies ++= Seq(
   "org.specs2" %% "specs2-core" % "5.0.0-RC-22" % "test",
   "org.specs2" %% "specs2-scalacheck" % "5.0.0-RC-22" % "test"
 )
+
+scalacOptions ++= Seq(
+  "-feature",
+  "-language:implicitConversions",
+  "-no-indent",
+  "-unchecked"
+)
+
+Test / fork := true
+Test / parallelExecution := false

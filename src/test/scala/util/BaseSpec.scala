@@ -9,8 +9,9 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Sim, SimState}
+import org.specs2.execute.{AsResult, Result}
 
-class BaseSpec extends Specification with ScalaCheck {
+abstract class BaseSpec extends Specification with ScalaCheck {
 
   // --- ScalaCheck generators ---
 
@@ -23,6 +24,14 @@ class BaseSpec extends Specification with ScalaCheck {
   def buildAndRun[A](buildFunc: BuilderEnv => A): (A, SimState) = {
     val (res, comp) = buildComponent(buildFunc)
     (res, Sim.runComponent(comp))
+  }
+
+  def runTickByTick[R: AsResult](comp: Component, maxTicks: Int)(f: (SimState, Int) => R): Result = {
+    var state = Sim.setup(Sim.build(comp))
+    foreach(0 to maxTicks) { tick =>
+      state = Sim.run(state, Some(tick))
+      f(state, tick)
+    }
   }
 
   // --- Extension methods ---
