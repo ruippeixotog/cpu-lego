@@ -16,3 +16,10 @@ def clock(freq: Int)(using env: BuilderEnv): Port = {
   env.add(clock)
   clock.out
 }
+
+def posEdge(in: Port)(using env: BuilderEnv): Port = {
+  val posEdge = new PosEdge
+  env.add(posEdge)
+  env.wire(in, posEdge.in)
+  posEdge.out
+}

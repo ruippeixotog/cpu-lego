@@ -8,7 +8,7 @@ import util.UnionFind
 
 case class PortGroup(root: Port)
 
-case class Circuit(components: List[NAND | Clock], wires: List[(Port, Port)]) {
+case class Circuit(components: List[BaseComponent], wires: List[(Port, Port)]) {
   private lazy val uf = wires.foldLeft(UnionFind[Port]())(_.merge.tupled(_))
 
   lazy val groupOf: Port => PortGroup =
@@ -32,12 +32,11 @@ object Sim {
 
   def build(root: Component, extraWires: List[(Port, Port)] = Nil): Circuit = {
     root match {
+      case comp: BaseComponent => Circuit(List(comp), extraWires)
       case comp: CompositeComponent =>
         comp.components.map(build(_)).fold(Circuit(Nil, extraWires ++ comp.wires)) { (c1, c2) =>
           Circuit(c1.components ++ c2.components, c1.wires ++ c2.wires)
         }
-      case nand: NAND => Circuit(List(nand), extraWires)
-      case clock: Clock => Circuit(List(clock), extraWires)
     }
   }
 
@@ -67,6 +66,16 @@ object Sim {
           clock.out,
           v => state.schedule(clock.freq, PortChange(clock.out, v.map(!_)))
         )
+
+      case posEdge: PosEdge =>
+        state.schedule(0, PortChange(posEdge.out, Some(false)))
+        state.watch(posEdge.in, {
+          case Some(true) =>
+            state.schedule(GateDelay, PortChange(posEdge.out, Some(true)))
+            state.schedule(GateDelay + 1, PortChange(posEdge.out, Some(false)))
+          case _ =>
+            // do nothing
+        })
     }
     state
   }

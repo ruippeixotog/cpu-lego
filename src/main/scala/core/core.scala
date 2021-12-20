@@ -7,13 +7,18 @@ case object High extends LogicLevel
 case object Low extends LogicLevel
 
 sealed trait Component
+sealed trait BaseComponent extends Component
 
-class NAND extends Component {
+class NAND extends BaseComponent {
   val in1, in2, out = new Port
 }
 
-class Clock(val freq: Int) extends Component {
+class Clock(val freq: Int) extends BaseComponent {
   val out = new Port
+}
+
+class PosEdge extends BaseComponent {
+  val in, out = new Port
 }
 
 trait CompositeComponent extends Component {
