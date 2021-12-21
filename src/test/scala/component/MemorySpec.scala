@@ -61,22 +61,31 @@ class MemorySpec extends util.BaseSpec {
     }
 
     "remain unset while clk is Low" in {
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(High, Low, Low) }
-      val state = Sim.runComponent(comp, Some(90))
+      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, Low) }
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "be set to High when S is set to High and clk is High" in {
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(High, Low, clock(100)) }
-      val state = Sim.runComponent(comp, Some(50))
+      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, High) }
+      state.get(q) must beSome(true)
+      state.get(nq) must beSome(false)
+    }
+
+    "be set unconditionally to High when preset is Low" in {
+      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(Low, High, Low, preset = Low) }
       state.get(q) must beSome(true)
       state.get(nq) must beSome(false)
     }
 
     "be set to Low when R is set to High and clk is High" in {
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(Low, High, clock(100)) }
-      val state = Sim.runComponent(comp, Some(50))
+      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(Low, High, High) }
+      state.get(q) must beSome(false)
+      state.get(nq) must beSome(true)
+    }
+
+    "be set unconditionally to Low when clear is Low" in {
+      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, Low, clear = Low) }
       state.get(q) must beSome(false)
       state.get(nq) must beSome(true)
     }

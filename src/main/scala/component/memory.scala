@@ -12,8 +12,15 @@ def nandLatch(set: Port, reset: Port)(using env: BuilderEnv): (Port, Port) = {
   (q, nq)
 }
 
-def latchClocked(set: Port, reset: Port, clk: Port)(using BuilderEnv): (Port, Port) =
-  nandLatch(nand(reset, clk), nand(set, clk))
+def latchClocked(set: Port, reset: Port, clk: Port, preset: Port = High, clear: Port = High)(using
+    BuilderEnv
+): (Port, Port) = {
+  nandLatch(
+    and(clear, nand(reset, clk)),
+    and(preset, nand(set, clk))
+  )
+}
 
-def dLatch(in: Port, clk: Port)(using BuilderEnv): (Port, Port) =
-  latchClocked(in, not(in), posEdge(clk))
+def dLatch(in: Port, clk: Port, preset: Port = High, clear: Port = High)(using BuilderEnv): (Port, Port) = {
+  latchClocked(in, not(in), posEdge(clk), preset, clear)
+}
