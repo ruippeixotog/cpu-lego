@@ -53,7 +53,7 @@ class CoreSpec extends util.BaseSpec {
       // expected delay from clock out to posEdge out
       val delay = Sim.WireDelay + Sim.GateDelay
       
-      runTickByTick(comp, 250) { (state, tick) =>
+      foreachTick(comp, 250) { (tick, state) =>
         // Positive edge triggering for clock(50) occurs at t=0,100,200...
         state.get(out) must beSome((tick - delay + 100) % 100 < Sim.PosEdgeDelay)
       }

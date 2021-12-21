@@ -29,25 +29,27 @@ class MemorySpec extends util.BaseSpec {
 
     "retain its original value when both S and R are High" in {
       val set, reset = new Port
-      val ((q, nq), state1) = buildAndRun { implicit env => nandLatch(set, reset) }
-      state1.get(q) must beNone
+      val ((q, nq), comp) = buildComponent { implicit env => nandLatch(set, reset) }
 
-      def setAndRun(state: SimState, s: Boolean, r: Boolean): SimState = {
+      def setInputs(state: SimState, s: Boolean, r: Boolean): Unit = {
         state.schedule(0, PortChange(set, Some(s)))
         state.schedule(0, PortChange(reset, Some(r)))
-        Sim.run(state)
       }
 
-      val state2 = setAndRun(state1, true, true)
-      state2.get(q) must beNone
-      val state3 = setAndRun(state2, true, false)
-      state3.get(q) must beSome(true)
-      val state4 = setAndRun(state3, true, true)
-      state4.get(q) must beSome(true)
-      val state5 = setAndRun(state4, false, true)
-      state5.get(q) must beSome(false)
-      val state6 = setAndRun(state5, true, true)
-      state6.get(q) must beSome(false)
+      runPlan(
+        comp,
+        10 -> { st => st.get(q) must beNone },
+        20 -> { st => setInputs(st, true, true) },
+        30 -> { st => st.get(q) must beNone },
+        40 -> { st => setInputs(st, true, false) },
+        50 -> { st => st.get(q) must beSome(true) },
+        60 -> { st => setInputs(st, true, true) },
+        70 -> { st => st.get(q) must beSome(true) },
+        80 -> { st => setInputs(st, false, true) },
+        90 -> { st => st.get(q) must beSome(false) },
+        100 -> { st => setInputs(st, true, true) },
+        110 -> { st => st.get(q) must beSome(false) }
+      )
     }
   }
 
@@ -93,34 +95,26 @@ class MemorySpec extends util.BaseSpec {
     "retain its original value when both S and R are Low" in {
       val set, reset = new Port
       val ((q, nq), comp) = buildComponent { implicit env => latchClocked(set, reset, clock(100)) }
-      var state = Sim.runComponent(comp, Some(50))
-      state.get(q) must beNone
 
-      def setInputs(tick: Int, s: Boolean, r: Boolean) = {
-        state.schedule(tick - state.t, PortChange(set, Some(s)))
-        state.schedule(tick - state.t, PortChange(reset, Some(r)))
+      def setInputs(state: SimState, s: Boolean, r: Boolean) = {
+        state.schedule(0, PortChange(set, Some(s)))
+        state.schedule(0, PortChange(reset, Some(r)))
       }
-      def resume(tick: Int) = state = Sim.run(state, Some(tick))
 
-      setInputs(150, false, false)
-      resume(250)
-      state.get(q) must beNone
-
-      setInputs(350, true, false)
-      resume(350)
-      state.get(q) must beNone
-      resume(450)
-      state.get(q) must beSome(true)
-
-      setInputs(550, false, false)
-      resume(650)
-      state.get(q) must beSome(true)
-
-      setInputs(750, false, true)
-      resume(750)
-      state.get(q) must beSome(true)
-      resume(850)
-      state.get(q) must beSome(false)
+      runPlan(
+        comp,
+        50 -> { st => st.get(q) must beNone },
+        150 -> { st => setInputs(st, false, false) },
+        250 -> { st => st.get(q) must beNone },
+        350 -> { st => setInputs(st, true, false) },
+        375 -> { st => st.get(q) must beNone },
+        450 -> { st => st.get(q) must beSome(true) },
+        550 -> { st => setInputs(st, false, false) },
+        650 -> { st => st.get(q) must beSome(true) },
+        750 -> { st => setInputs(st, false, true) },
+        775 -> { st => st.get(q) must beSome(true) },
+        850 -> { st => st.get(q) must beSome(false) }
+      )
     }
   }
 
@@ -143,27 +137,23 @@ class MemorySpec extends util.BaseSpec {
     "retain its original value outside positive edges" in {
       val in = new Port
       val ((q, nq), comp) = buildComponent { implicit env => dLatch(in, clock(100)) }
-      var state = Sim.runComponent(comp, Some(50))
-      state.get(q) must beNone
 
-      def setInputs(tick: Int, d: Boolean) = {
-        state.schedule(tick - state.t, PortChange(in, Some(d)))
+      def setInputs(state: SimState, d: Boolean) = {
+        state.schedule(0, PortChange(in, Some(d)))
       }
-      def resume(tick: Int) = state = Sim.run(state, Some(tick))
 
-      setInputs(50, true)
-      resume(50)
-      state.get(q) must beNone
-      resume(150)
-      state.get(q) must beNone
-      resume(250)
-      state.get(q) must beSome(true)
+      runPlan(
+        comp,
+        25 -> { st => st.get(q) must beNone },
+        50 -> { st => setInputs(st, true) },
+        75 -> { st => st.get(q) must beNone },
+        150 -> { st => st.get(q) must beNone },
+        250 -> { st => st.get(q) must beSome(true) },
 
-      setInputs(300, false)
-      resume(350)
-      state.get(q) must beSome(true)
-      resume(450)
-      state.get(q) must beSome(false)
+        300 -> { st => setInputs(st, false) },
+        350 -> { st => st.get(q) must beSome(true) },
+        450 -> { st => st.get(q) must beSome(false) }
+      )
     }
   }
 }

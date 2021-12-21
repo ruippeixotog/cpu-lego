@@ -26,12 +26,19 @@ abstract class BaseSpec extends Specification with ScalaCheck {
     (res, Sim.runComponent(comp))
   }
 
-  def runTickByTick[R: AsResult](comp: Component, maxTicks: Int)(f: (SimState, Int) => R): Result = {
+  def runPlan(comp: Component, plan: (Int, SimState => Result | Unit)*): Result = {
     var state = Sim.setup(Sim.build(comp))
-    foreach(0 to maxTicks) { tick =>
+    foreach(plan.toList.sortBy(_._1)) { case (tick, f) =>
       state = Sim.run(state, Some(tick))
-      f(state, tick)
+      f(state) match {
+        case r: Result => r.updateMessage(s"At t=$tick: " + _)
+        case () => ok
+      }
     }
+  }
+
+  def foreachTick(comp: Component, maxTicks: Int)(f: (Int, SimState) => Result): Result = {
+    runPlan(comp, (0 to maxTicks).map { tick => (tick, f(tick, _)) }: _*)
   }
 
   // --- Extension methods ---
