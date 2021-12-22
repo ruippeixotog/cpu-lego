@@ -61,6 +61,21 @@ object Sim {
         state.watch(nand.in1, v1o => propagate(v1o, state.get(nand.in2)))
         state.watch(nand.in2, v2o => propagate(state.get(nand.in1), v2o))
 
+      case ff: Flipflop =>
+        def propagate(set: Option[Boolean], reset: Option[Boolean]): Unit = {
+          val res = (set, reset) match {
+            case (Some(true), Some(false)) => Some(true)
+            case (Some(false), Some(true)) => Some(false)
+            case _ => None
+          }
+          res.foreach { v =>
+            state.schedule(GateDelay, PortChange(ff.q, Some(v)))
+            state.schedule(GateDelay, PortChange(ff.nq, Some(!v)))
+          }
+        }
+        state.watch(ff.set, v1o => propagate(v1o, state.get(ff.reset)))
+        state.watch(ff.reset, v2o => propagate(state.get(ff.set), v2o))
+
       case clock: Clock =>
         state.schedule(0, PortChange(clock.out, Some(true)))
         state.watch(

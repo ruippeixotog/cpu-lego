@@ -13,6 +13,10 @@ class NAND extends BaseComponent {
   val in1, in2, out = new Port
 }
 
+class Flipflop extends BaseComponent { self =>
+  val set, reset, q, nq = new Port
+}
+
 class Clock(val freq: Int) extends BaseComponent {
   val out = new Port
 }

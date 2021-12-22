@@ -12,51 +12,6 @@ class MemorySpec extends util.BaseSpec {
     Gen.choose(1, 20).flatMap { n => Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary) }
   )
 
-  "A nandLatch" should {
-
-    "start unset" in {
-      val ((q, nq), state) = buildAndRun { implicit env => nandLatch(new Port, new Port) }
-      state.get(q) must beNone
-      state.get(nq) must beNone
-    }
-
-    "be set to High when S is set to High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => nandLatch(High, Low) }
-      state.get(q) must beSome(true)
-      state.get(nq) must beSome(false)
-    }
-
-    "be set to Low when R is set to High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => nandLatch(Low, High) }
-      state.get(q) must beSome(false)
-      state.get(nq) must beSome(true)
-    }
-
-    "retain its original value when both S and R are High" in {
-      val set, reset = new Port
-      val ((q, nq), comp) = buildComponent { implicit env => nandLatch(set, reset) }
-
-      def setInputs(s: Boolean, r: Boolean)(state: SimState): Unit = {
-        state.schedule(0, PortChange(set, Some(s)))
-        state.schedule(0, PortChange(reset, Some(r)))
-      }
-
-      runPlan(
-        comp,
-        10 -> { _.get(q) must beNone },
-        20 -> setInputs(true, true),
-        30 -> { _.get(q) must beNone },
-        40 -> setInputs(true, false),
-        50 -> { _.get(q) must beSome(true) },
-        60 -> setInputs(true, true),
-        70 -> { _.get(q) must beSome(true) },
-        80 -> setInputs(false, true),
-        90 -> { _.get(q) must beSome(false) },
-        100 -> setInputs(true, true),
-        110 -> { _.get(q) must beSome(false) }
-      )
-    }
-  }
 
   "A latchClocked" should {
 
