@@ -21,7 +21,7 @@ case class Circuit(components: List[BaseComponent], wires: List[(Port, Port)]) {
 object Sim {
   val GateDelay = 1
   val WireDelay = 1
-  val PosEdgeDelay = 5
+  val PosEdgeDelay = 1
 
   def runComponent(root: Component, maxTicks: Option[Int] = None): SimState = {
     runCircuit(build(root), maxTicks)
@@ -106,7 +106,12 @@ object Sim {
       st.events = st.events.tail
       st.t = t1
 
-      for (ev <- evs) {
+      val sortedEvs = evs.sortBy {
+        case PortGroupDrive(_) => 1
+        case PortChange(_, _) => 2
+      }
+
+      for (ev <- sortedEvs) {
         if(st.debug) println(s"t=$t1: $ev")
 
         ev match {

@@ -89,7 +89,7 @@ class MemorySpec extends util.BaseSpec {
 
     "be set to the input on positive edge trigger" in forAll { (in: LogicLevel) =>
       val ((q, nq), comp) = buildComponent { implicit env => dLatch(in, clock(100)) }
-      val state = Sim.runComponent(comp, Some(50))
+      val state = Sim.runComponent(comp, Some(250))
       state.get(q) must beSome(in.toBool)
       state.get(nq) must beSome(!in.toBool)
     }
