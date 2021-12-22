@@ -7,9 +7,9 @@ import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
+import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
 import simulator.{Sim, SimState}
-import org.specs2.execute.{AsResult, Result}
 
 abstract class BaseSpec extends Specification with ScalaCheck {
 
@@ -45,7 +45,7 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   extension [A](self: Seq[Option[A]]) {
     def sequence: Option[Seq[A]] =
-      self.foldLeft[Option[List[A]]](Some(Nil)) { case (acc, x) => x.zip(acc).map(_ :: _) }
+      self.foldRight[Option[List[A]]](Some(Nil)) { case (x, acc) => x.zip(acc).map(_ :: _) }
   }
 
   extension (self: LogicLevel) {

@@ -24,3 +24,13 @@ def latchClocked(set: Port, reset: Port, clk: Port, preset: Port = High, clear: 
 def dLatch(in: Port, clk: Port, preset: Port = High, clear: Port = High)(using BuilderEnv): (Port, Port) = {
   latchClocked(in, not(in), posEdge(clk), preset, clear)
 }
+
+def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High)(using env: BuilderEnv): Seq[Port] = {
+  val notLoad = not(load)
+  xs.map { x =>
+    val aux = new Port
+    val (q, _) = dLatch(or(and(aux, notLoad), and(x, load)), clk, clear = clear)
+    env.wire(q, aux)
+    q
+  }
+}

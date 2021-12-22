@@ -3,9 +3,14 @@ package component
 import component.BuilderDSL._
 import core._
 import org.scalacheck.Prop.forAll
+import org.scalacheck.{Arbitrary, Gen}
 import simulator.{PortChange, Sim, SimState}
 
 class MemorySpec extends util.BaseSpec {
+
+  given Arbitrary[List[LogicLevel]] = Arbitrary(
+    Gen.choose(1, 20).flatMap { n => Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary) }
+  )
 
   "A nandLatch" should {
 
@@ -149,10 +154,74 @@ class MemorySpec extends util.BaseSpec {
         75 -> { _.get(q) must beNone },
         150 -> { _.get(q) must beNone },
         250 -> { _.get(q) must beSome(true) },
-
         300 -> setInput(false),
         350 -> { _.get(q) must beSome(true) },
         450 -> { _.get(q) must beSome(false) }
+      )
+    }
+  }
+
+  "A register" should {
+
+    "start unset" in forAll(Gen.choose(1, 20)) { n =>
+      val (outs, comp) = buildComponent { implicit env =>
+        register(Array.fill(n)(new Port), Low, clock(100))
+      }
+      val state = Sim.runComponent(comp, Some(1000))
+      foreach(outs) { out => state.get(out) must beNone }
+    }
+
+    "remain unset while clk is Low" in forAll { (ins: List[LogicLevel]) =>
+      val (outs, state) = buildAndRun { implicit env => register(ins, High, Low) }
+      foreach(outs) { out => state.get(out) must beNone }
+    }
+
+    "remain unset while load is Low" in forAll { (ins: List[LogicLevel]) =>
+      val (outs, comp) = buildComponent { implicit env => register(ins, Low, clock(100)) }
+      val state = Sim.runComponent(comp, Some(1000))
+      foreach(outs) { out => state.get(out) must beNone }
+    }
+
+    "be set to the input on clock positive edge when load is High" in forAll { (ins: List[LogicLevel]) =>
+      val (outs, comp) = buildComponent { implicit env => register(ins, High, clock(100)) }
+      val state = Sim.runComponent(comp, Some(250))
+      outs.map(state.get).sequence must beSome.which { bools =>
+        bools must beEqualTo(ins.map(_.toBool))
+      }
+    }
+
+    "be set unconditionally to Low when clear is Low" in forAll { (ins: List[LogicLevel]) =>
+      val (outs, state) = buildAndRun { implicit env => register(ins, Low, Low, clear = Low) }
+      outs.map(state.get).sequence must beSome(List.fill(ins.length)(false))
+    }
+
+    "retain its original value outside positive edges or when load is Low" in {
+      val load = new Port
+      val ins = Array.fill(4)(new Port)
+      val (outs, comp) = buildComponent { implicit env => register(ins, load, clock(100)) }
+
+      def setInputs(load0: Boolean, ins0: List[Boolean])(state: SimState) = {
+        state.schedule(0, PortChange(load, Some(load0)))
+        ins.zip(ins0).foreach { case (port, v) => state.schedule(0, PortChange(port, Some(v))) }
+      }
+
+      val val1 = List(true, false, false, true)
+      val val2 = List(true, false, true, false)
+
+      runPlan(
+        comp,
+        25 -> { st => foreach(outs) { st.get(_) must beNone } },
+        50 -> setInputs(false, val1),
+        250 -> { st => foreach(outs) { st.get(_) must beNone } },
+        275 -> setInputs(true, val1),
+        300 -> { st => foreach(outs) { st.get(_) must beNone } },
+        350 -> { st => foreach(outs) { st.get(_) must beNone } },
+        450 -> { st => outs.map(st.get).sequence must beSome(val1) },
+        475 -> setInputs(false, val2),
+        650 -> { st => outs.map(st.get).sequence must beSome(val1) },
+        675 -> setInputs(true, val2),
+        750 -> { st => outs.map(st.get).sequence must beSome(val1) },
+        850 -> { st => outs.map(st.get).sequence must beSome(val2) }
       )
     }
   }
