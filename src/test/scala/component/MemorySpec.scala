@@ -12,7 +12,6 @@ class MemorySpec extends util.BaseSpec {
     Gen.choose(1, 20).flatMap { n => Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary) }
   )
 
-
   "A latchClocked" should {
 
     "start unset" in {
@@ -76,6 +75,36 @@ class MemorySpec extends util.BaseSpec {
         850 -> { _.get(q) must beSome(false) }
       )
     }
+
+    "behave well under any combination of the above" in {
+      val set, reset, clock = newPort()
+      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(set, reset, clock) }
+
+      given Arbitrary[Port] = Arbitrary(Gen.oneOf(set, clock))
+
+      forAll { (actions: List[(Port, Boolean)]) =>
+        var state = Sim.runComponent(comp)
+
+        var expectedQ = Option.empty[Boolean]
+        foreach(actions) { case (port, newVal) =>
+          state.schedule(0, PortChange(port, Some(newVal)))
+          if (port == set) {
+            state.schedule(0, PortChange(reset, Some(!newVal)))
+          }
+          state = Sim.run(state)
+
+          if (state.get(clock).contains(true)) {
+            expectedQ = (state.get(set), state.get(reset)) match {
+              case (Some(true), _) => Some(true)
+              case (_, Some(true)) => Some(false)
+              case _ => expectedQ
+            }
+          }
+          state.get(q) must beEqualTo(expectedQ)
+          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        }
+      }
+    }
   }
 
   "A dLatch" should {
@@ -113,6 +142,29 @@ class MemorySpec extends util.BaseSpec {
         350 -> { _.get(q) must beSome(true) },
         450 -> { _.get(q) must beSome(false) }
       )
+    }
+
+    "behave well under any combination of the above" in {
+      val d, clock = newPort()
+      val ((q, nq), comp) = buildComponent { implicit env => dLatch(d, clock) }
+
+      given Arbitrary[Port] = Arbitrary(Gen.oneOf(d, clock))
+
+      forAll { (actions: List[(Port, Boolean)]) =>
+        var state = Sim.runComponent(comp)
+
+        var expectedQ = Option.empty[Boolean]
+        foreach(actions) { case (port, newVal) =>
+          state.schedule(0, PortChange(port, Some(newVal)))
+          if (port == clock && newVal && state.get(clock) != Some(true)) {
+            expectedQ = state.get(d).orElse(expectedQ)
+          }
+
+          state = Sim.run(state)
+          state.get(q) must beEqualTo(expectedQ)
+          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        }
+      }
     }
   }
 
@@ -178,6 +230,40 @@ class MemorySpec extends util.BaseSpec {
         750 -> { st => outs.map(st.get).sequence must beSome(val1) },
         850 -> { st => outs.map(st.get).sequence must beSome(val2) }
       )
+    }
+
+    "behave well under any combination of the above" in {
+      forAll(Gen.choose(1, 10)) { n =>
+        val xs = List.fill(n)(newPort())
+        val load, clk, clear = newPort()
+        val (outs, comp) = buildComponent { implicit env => register(xs, load, clk, clear) }
+
+        val inits = List(load -> false, clk -> false, clear -> true)
+
+        given Arbitrary[Port] = Arbitrary(Gen.oneOf(load :: clk :: clear :: xs))
+
+        forAll { (actions: List[(Port, Boolean)]) =>
+          var state = Sim.runComponent(comp)
+          inits.foreach { case (port, newVal) => state.schedule(0, PortChange(port, Some(newVal))) }
+
+          var expectedOuts = List.fill(n)(Option.empty[Boolean])
+          foreach(actions) { case (port, newVal) =>
+            state.schedule(0, PortChange(port, Some(newVal)))
+
+            if (port == clk && newVal && state.get(clk) != Some(true) && state.get(load) == Some(true)) {
+              expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
+                state.get(x).orElse(curr)
+              }
+            }
+
+            state = Sim.run(state)
+            if (state.get(clear).contains(false)) {
+              expectedOuts = List.fill(n)(Some(false))
+            }
+            outs.map(state.get) must beEqualTo(expectedOuts)
+          }
+        }
+      }
     }
   }
 }
