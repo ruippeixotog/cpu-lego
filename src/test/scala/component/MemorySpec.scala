@@ -93,7 +93,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           case _ => // do nothing
         }
         .onAction { (state, _, _, _) =>
-          if (state.get(clock).contains(true)) {
+          if (state.get(clock) == Some(true)) {
             expectedQ = (state.get(set), state.get(reset)) match {
               case (Some(true), _) => Some(true)
               case (_, Some(true)) => Some(false)

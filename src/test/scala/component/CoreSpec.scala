@@ -10,7 +10,7 @@ import org.specs2.mutable.Specification
 import simulator.{Circuit, PortChange, Sim, SimState}
 import testkit._
 
-class CoreSpec extends BaseSpec {
+class CoreSpec extends BaseSpec with SequentialScenarios {
 
   "A NAND" should {
     "compute !(a & b)" in forAll { (in1: Option[LogicLevel], in2: Option[LogicLevel]) =>
@@ -46,7 +46,7 @@ class CoreSpec extends BaseSpec {
     }
 
     "retain its original value when both S and R are High" in {
-      val set, reset = new Port
+      val set, reset = newPort()
       val ((q, nq), comp) = buildComponent { implicit env => flipflop(set, reset) }
 
       def setInputs(s: Boolean, r: Boolean)(state: SimState): Unit = {
@@ -68,6 +68,35 @@ class CoreSpec extends BaseSpec {
         100 -> setInputs(true, true),
         110 -> { _.get(q) must beSome(false) }
       )
+    }
+
+    "behave well under any combination of the above" in {
+      val set, reset = newPort()
+      val ((q, nq), comp) = buildComponent { implicit env => flipflop(set, reset) }
+
+      var expectedQ = Option.empty[Boolean]
+
+      SequentialScenario(comp)
+        .withPorts(set -> None, reset -> None)
+        .onStart { _ => expectedQ = None }
+        .beforeAction {
+          // ensure `set` and `reset` are not High at the same time
+          case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
+          case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
+          case _ => // do nothing
+        }
+        .onAction { (state, _, _, _) =>
+          expectedQ = (state.get(set), state.get(reset)) match {
+            case (Some(true), _) => Some(true)
+            case (_, Some(true)) => Some(false)
+            case _ => expectedQ
+          }
+        }
+        .check { state =>
+          state.get(q) must beEqualTo(expectedQ)
+          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        }
+        .run()
     }
   }
 
