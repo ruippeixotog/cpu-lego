@@ -15,11 +15,17 @@ object BuilderDSLMacros {
 
     val portName = Expr(Symbol.spliceOwner.owner.name)
     val thisRef = This(getClassOwner())
-    val thisName = Apply(Select.unique(thisRef, "toString"), Nil).asExprOf[String]
+
+    val toStringExpr =
+      if (thisRef.tpe <:< TypeRepr.of[Component]) {
+        '{ ${ thisRef.asExpr }.toString + "." + ${ portName } }
+      } else {
+        portName
+      }
 
     '{
       new Port {
-        override def toString = ${ thisName } + "." + ${ portName }
+        override def toString = ${ toStringExpr }
       }
     }
   }
