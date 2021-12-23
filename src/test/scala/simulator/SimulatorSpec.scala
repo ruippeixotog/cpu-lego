@@ -7,8 +7,9 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
+import testkit._
 
-class SimulatorSpec extends util.BaseSpec {
+class SimulatorSpec extends BaseSpec {
 
   case class Instance(comb: List[Port] => Port, f: List[Boolean] => Boolean)
   case class Spec(numInputs: Int, spec: BuilderEnv => Instance)

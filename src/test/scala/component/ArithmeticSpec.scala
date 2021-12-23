@@ -7,8 +7,9 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Circuit, Sim}
+import testkit._
 
-class ArithmeticSpec extends util.BaseSpec {
+class ArithmeticSpec extends BaseSpec {
 
   given Arbitrary[List[(LogicLevel, LogicLevel)]] = Arbitrary(
     Gen.listOfN(20, summon[Arbitrary[(LogicLevel, LogicLevel)]].arbitrary)

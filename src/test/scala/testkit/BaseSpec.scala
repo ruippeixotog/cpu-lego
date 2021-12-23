@@ -1,4 +1,4 @@
-package util
+package testkit
 
 import scala.annotation.targetName
 

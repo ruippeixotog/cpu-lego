@@ -7,8 +7,9 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Circuit, Sim}
+import testkit._
 
-class LogicSpec extends util.BaseSpec {
+class LogicSpec extends BaseSpec {
 
   "A NOT" should {
     "compute !a" in forAll { (in: Option[LogicLevel]) =>

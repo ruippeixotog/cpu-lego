@@ -8,8 +8,9 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Circuit, PortChange, Sim, SimState}
+import testkit._
 
-class CoreSpec extends util.BaseSpec {
+class CoreSpec extends BaseSpec {
 
   "A NAND" should {
     "compute !(a & b)" in forAll { (in1: Option[LogicLevel], in2: Option[LogicLevel]) =>

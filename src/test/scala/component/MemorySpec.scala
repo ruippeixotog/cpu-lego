@@ -5,8 +5,9 @@ import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import simulator.{PortChange, Sim, SimState}
+import testkit._
 
-class MemorySpec extends util.BaseSpec {
+class MemorySpec extends BaseSpec with SequentialScenarios {
 
   given Arbitrary[List[LogicLevel]] = Arbitrary(
     Gen.choose(1, 20).flatMap { n => Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary) }
@@ -80,19 +81,18 @@ class MemorySpec extends util.BaseSpec {
       val set, reset, clock = newPort()
       val ((q, nq), comp) = buildComponent { implicit env => latchClocked(set, reset, clock) }
 
-      given Arbitrary[Port] = Arbitrary(Gen.oneOf(set, clock))
+      var expectedQ = Option.empty[Boolean]
 
-      forAll { (actions: List[(Port, Boolean)]) =>
-        var state = Sim.runComponent(comp)
-
-        var expectedQ = Option.empty[Boolean]
-        foreach(actions) { case (port, newVal) =>
-          state.schedule(0, PortChange(port, Some(newVal)))
-          if (port == set) {
-            state.schedule(0, PortChange(reset, Some(!newVal)))
-          }
-          state = Sim.run(state)
-
+      SequentialScenario(comp)
+        .withPorts(set -> None, reset -> None, clock -> Some(true))
+        .onStart { _ => expectedQ = None }
+        .beforeAction {
+          // ensure `set` and `reset` are not High at the same time
+          case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
+          case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
+          case _ => // do nothing
+        }
+        .onAction { (state, _, _, _) =>
           if (state.get(clock).contains(true)) {
             expectedQ = (state.get(set), state.get(reset)) match {
               case (Some(true), _) => Some(true)
@@ -100,10 +100,12 @@ class MemorySpec extends util.BaseSpec {
               case _ => expectedQ
             }
           }
+        }
+        .check { state =>
           state.get(q) must beEqualTo(expectedQ)
           state.get(nq) must beEqualTo(expectedQ.map(!_))
         }
-      }
+        .run()
     }
   }
 
@@ -148,23 +150,21 @@ class MemorySpec extends util.BaseSpec {
       val d, clock = newPort()
       val ((q, nq), comp) = buildComponent { implicit env => dLatch(d, clock) }
 
-      given Arbitrary[Port] = Arbitrary(Gen.oneOf(d, clock))
+      var expectedQ = Option.empty[Boolean]
 
-      forAll { (actions: List[(Port, Boolean)]) =>
-        var state = Sim.runComponent(comp)
-
-        var expectedQ = Option.empty[Boolean]
-        foreach(actions) { case (port, newVal) =>
-          state.schedule(0, PortChange(port, Some(newVal)))
-          if (port == clock && newVal && state.get(clock) != Some(true)) {
+      SequentialScenario(comp)
+        .withPorts(d -> None, clock -> Some(true))
+        .onStart { _ => expectedQ = None }
+        .onAction {
+          case (state, `clock`, true, Some(false)) =>
             expectedQ = state.get(d).orElse(expectedQ)
-          }
-
-          state = Sim.run(state)
+          case _ => // do nothing
+        }
+        .check { state =>
           state.get(q) must beEqualTo(expectedQ)
           state.get(nq) must beEqualTo(expectedQ.map(!_))
         }
-      }
+        .run()
     }
   }
 
@@ -238,31 +238,26 @@ class MemorySpec extends util.BaseSpec {
         val load, clk, clear = newPort()
         val (outs, comp) = buildComponent { implicit env => register(xs, load, clk, clear) }
 
-        val inits = List(load -> false, clk -> false, clear -> true)
+        val inits = load -> Some(false) :: clk -> Some(true) :: clear -> Some(false) :: xs.map(_ -> None)
+        var expectedOuts = List.fill(n)(Option.empty[Boolean])
 
-        given Arbitrary[Port] = Arbitrary(Gen.oneOf(load :: clk :: clear :: xs))
-
-        forAll { (actions: List[(Port, Boolean)]) =>
-          var state = Sim.runComponent(comp)
-          inits.foreach { case (port, newVal) => state.schedule(0, PortChange(port, Some(newVal))) }
-
-          var expectedOuts = List.fill(n)(Option.empty[Boolean])
-          foreach(actions) { case (port, newVal) =>
-            state.schedule(0, PortChange(port, Some(newVal)))
-
-            if (port == clk && newVal && state.get(clk) != Some(true) && state.get(load) == Some(true)) {
+        SequentialScenario(comp)
+          .withPorts(inits: _*)
+          .onStart { _ => expectedOuts = List.fill(n)(Some(false)) }
+          .onAction { (state, port, newVal, oldVal) =>
+            if (port == clk && newVal && oldVal == Some(false) && state.get(load) == Some(true)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
                 state.get(x).orElse(curr)
               }
             }
-
-            state = Sim.run(state)
-            if (state.get(clear).contains(false)) {
+            if (state.get(clear) == Some(false)) {
               expectedOuts = List.fill(n)(Some(false))
             }
+          }
+          .check { state =>
             outs.map(state.get) must beEqualTo(expectedOuts)
           }
-        }
+          .run()
       }
     }
   }
