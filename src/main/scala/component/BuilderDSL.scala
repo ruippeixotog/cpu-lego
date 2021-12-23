@@ -9,6 +9,8 @@ object BuilderDSL {
     def wire(port1: Port, port2: Port): Unit
   }
 
+  inline def newPort(): Port = ${ BuilderDSLMacros.newPortImpl() }
+
   def buildComponent[A](buildFunc: BuilderEnv => A): (A, Component) = {
     var components0 = List.empty[Component]
     var wires0 = List.empty[(Port, Port)]
