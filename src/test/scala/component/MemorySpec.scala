@@ -168,6 +168,45 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
+  "A jkMasterSlave" should {
+
+    "start unset" in {
+      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(new Port, new Port, clock(100)) }
+      val state = Sim.runComponent(comp, Some(1000))
+      state.get(q) must beNone
+      state.get(nq) must beNone
+    }
+
+    "behave as a JK flip-flop" in {
+      val j, k, clk, clear = newPort()
+      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(j, k, clk, clear) }
+
+      var expectedQ = Option.empty[Boolean]
+
+      SequentialScenario(comp)
+        .withPorts(j -> Some(false), k -> Some(false), clk -> Some(true), clear -> Some(false))
+        .onStart { _ => expectedQ = Some(false) }
+        .onAction { (state, port, newVal, oldVal) =>
+          if (port == clk && newVal && oldVal == Some(false)) {
+            expectedQ = (state.get(j), state.get(k)) match {
+              case (Some(true), Some(false)) => Some(true)
+              case (Some(false), Some(true)) => Some(false)
+              case (Some(true), Some(true)) => expectedQ.map(!_)
+              case _ => expectedQ
+            }
+          }
+          if (state.get(clear) == Some(false)) {
+            expectedQ = Some(false)
+          }
+        }
+        .check { state =>
+          state.get(q) must beEqualTo(expectedQ)
+          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        }
+        .run()
+    }
+  }
+
   "A register" should {
 
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
