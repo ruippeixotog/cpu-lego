@@ -171,13 +171,45 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A jkMasterSlave" should {
 
     "start unset" in {
-      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(new Port, new Port, clock(100)) }
+      val ((q, nq), comp) = buildComponent { implicit env =>
+        jkMasterSlave(new Port, new Port, clock(100), High)
+      }
       val state = Sim.runComponent(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
-    "behave as a JK flip-flop" in {
+    "toggle the output when both inputs are High" in {
+      val j, k, clear = newPort()
+      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(j, k, clock(100), clear) }
+
+      def setClear(clr: Boolean)(state: SimState) =
+        state.schedule(0, PortChange(clear, Some(clr)))
+
+      def setInput(set: Boolean, reset: Boolean)(state: SimState) = {
+        state.schedule(0, PortChange(j, Some(set)))
+        state.schedule(0, PortChange(k, Some(reset)))
+      }
+
+      runPlan(
+        comp,
+        10 -> setClear(false),
+        20 -> setClear(true),
+        50 -> { _.get(q) must beSome(false) },
+        50 -> setInput(true, false),
+        75 -> { _.get(q) must beSome(false) },
+        150 -> { _.get(q) must beSome(false) },
+        250 -> { _.get(q) must beSome(true) },
+        300 -> setInput(false, true),
+        350 -> { _.get(q) must beSome(true) },
+        450 -> { _.get(q) must beSome(false) },
+        500 -> setInput(true, true),
+        650 -> { _.get(q) must beSome(true) },
+        850 -> { _.get(q) must beSome(false) }
+      )
+    }
+
+    "behave as a JK master-slave flip-flop" in {
       val j, k, clk, clear = newPort()
       val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(j, k, clk, clear) }
 
@@ -295,6 +327,61 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
           .check { state =>
             outs.map(state.get) must beEqualTo(expectedOuts)
+          }
+          .run()
+      }
+    }
+  }
+
+  "A counter" should {
+
+    "count the number of clock cycles when count is High" in {
+      val clear = newPort()
+      val (outs, comp) = buildComponent { implicit env => counter(2, High, clock(100), clear) }
+      outs must haveLength(2)
+
+      def setClear(clr: Boolean)(state: SimState) =
+        state.schedule(0, PortChange(clear, Some(clr)))
+
+      def getOutAsInt(state: SimState): Option[Int] =
+        outs.map(state.get).sequence.map(_.toInt)
+
+      runPlan(
+        comp,
+        0 -> setClear(false),
+        25 -> setClear(true),
+        50 -> { st => getOutAsInt(st) must beSome(0) },
+        125 -> { st => getOutAsInt(st) must beSome(1) },
+        250 -> { st => getOutAsInt(st) must beSome(1) },
+        350 -> { st => getOutAsInt(st) must beSome(2) },
+        550 -> { st => getOutAsInt(st) must beSome(3) },
+        750 -> { st => getOutAsInt(st) must beSome(0) },
+        950 -> { st => getOutAsInt(st) must beSome(1) }
+      )
+    }
+
+    "behave as a controlled binary counter" in {
+      forAll(Gen.choose(1, 1)) { n =>
+        val count, clk, clear = newPort()
+        val (outs, comp) = buildComponent { implicit env => counter(n, count, clk, clear) }
+        outs must haveLength(n)
+
+        var expectedOut = 0
+
+        SequentialScenario(comp)
+          .withPorts(count -> Some(false), clk -> Some(true), clear -> Some(false))
+          .withTestCases(List((clear, true), (count, true), (clk, false)))
+          .onStart { _ => expectedOut = 0 }
+          .onAction { (state, port, newVal, oldVal) =>
+            if (port == clk && !newVal && oldVal == Some(true) && state.get(count) == Some(true)) {
+              expectedOut = (expectedOut + 1) % (1 << n)
+            }
+            if (state.get(clear) == Some(false)) {
+              expectedOut = 0
+            }
+          }
+          .check { state =>
+            outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
           }
           .run()
       }

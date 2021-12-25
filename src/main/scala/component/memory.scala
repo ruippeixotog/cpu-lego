@@ -26,7 +26,7 @@ def dLatch(in: Port, clk: Port, preset: Port = High, clear: Port = High)(using B
   latchClocked(in, not(in), posEdge(clk), preset, clear)
 }
 
-def jkMasterSlave(j: Port, k: Port, clk: Port, clear: Port = High)(using env: BuilderEnv): (Port, Port) = {
+def jkMasterSlave(j: Port, k: Port, clk: Port, clear: Port)(using env: BuilderEnv): (Port, Port) = {
   val aux1, aux2 = newPort()
   val (q, nq) = latchClocked(and(aux1, j), and(aux2, k), posEdge(clk), clear = clear)
   env.wire(nq, aux1)
@@ -43,3 +43,6 @@ def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High)(using env
     q
   }
 }
+
+def counter(n: Int, count: Port, clk: Port, clear: Port)(using BuilderEnv): Seq[Port] =
+  (1 to n).scanLeft(clk) { case (prev, _) => jkMasterSlave(count, count, not(prev), clear)._1 }.tail
