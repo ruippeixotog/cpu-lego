@@ -65,15 +65,15 @@ abstract class BaseSpec extends Specification with ScalaCheck {
   }
 
   extension (self: Seq[LogicLevel]) {
-    def toUInt: Int = self.map(_.toBool).toUInt
     def toInt: Int = self.map(_.toBool).toInt
   }
 
   extension (self: Seq[Boolean]) {
     @targetName("boolSeqToUInt")
-    def toUInt: Int = self.zipWithIndex.filter(_._1).foldLeft(0)((acc, i) => acc & (1 << i._2))
+    def toInt: Int = self.zipWithIndex.filter(_._1).foldLeft(0)((acc, i) => acc | (1 << i._2))
+  }
 
-    @targetName("boolSeqToInt")
-    def toInt: Int = (self ++ List.fill(32 - self.length)(self.last)).toUInt
+  extension (self: Int) {
+    def truncate(n: Int): Int = self & (1 << n - 1)
   }
 }

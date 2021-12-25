@@ -31,7 +31,7 @@ class ArithmeticSpec extends BaseSpec {
       val ((outs, carry), state) = buildAndRun { implicit env => binaryAdder(in1, in2) }
 
       (outs :+ carry).map(state.get).sequence must beSome.which { bools =>
-        bools.toUInt must beEqualTo(in1.toUInt + in2.toUInt)
+        bools.toInt must beEqualTo(in1.toInt + in2.toInt)
       }
     }
   }
@@ -39,20 +39,22 @@ class ArithmeticSpec extends BaseSpec {
   "An addSub" should {
 
     "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+      val n = ins.length
       val (in1, in2) = ins.unzip
       val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, Low) }
 
       outs.map(state.get).sequence must beSome.which { bools =>
-        bools.toInt must beEqualTo(in1.toInt + in2.toInt)
+        bools.toInt.truncate(n) must beEqualTo((in1.toInt + in2.toInt).truncate(n))
       }
     }
 
     "compute a subtraction correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+      val n = ins.length
       val (in1, in2) = ins.unzip
       val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, High) }
 
       outs.map(state.get).sequence must beSome.which { bools =>
-        bools.toInt must beEqualTo(in1.toInt - in2.toInt)
+        bools.toInt.truncate(n) must beEqualTo((in1.toInt - in2.toInt).truncate(n))
       }
     }
   }
