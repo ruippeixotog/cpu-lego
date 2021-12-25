@@ -92,6 +92,17 @@ object Sim {
           case _ =>
             // do nothing
         })
+      
+      case switch: Switch =>
+        state.watch(switch.enable, {
+          case Some(true) => state.schedule(0, PortChange(switch.out, state.get(switch.in)))
+          case _ => state.schedule(0, PortChange(switch.out, None))
+        })
+        state.watch(switch.in, v => {
+          if(state.get(switch.enable) == Some(true)) {
+            state.schedule(0, PortChange(switch.out, v))
+          }
+        })
     }
     state
   }

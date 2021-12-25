@@ -31,3 +31,11 @@ def posEdge(in: Port)(using env: BuilderEnv): Port = newComponent {
   env.wire(in, posEdge.in)
   posEdge.out
 }
+
+def switch(in: Port, enable: Port)(using env: BuilderEnv): Port = newComponent {
+  val switch = new Switch
+  env.add(switch)
+  env.wire(in, switch.in)
+  env.wire(enable, switch.enable)
+  switch.out
+}

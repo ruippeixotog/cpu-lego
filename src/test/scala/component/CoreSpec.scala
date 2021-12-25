@@ -13,6 +13,7 @@ import testkit._
 class CoreSpec extends BaseSpec with SequentialScenarios {
 
   "A NAND" should {
+
     "compute !(a & b)" in forAll { (in1: Option[LogicLevel], in2: Option[LogicLevel]) =>
       val expected = (in1, in2) match {
         case (Some(Low), _) => Some(true)
@@ -133,6 +134,28 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         // Positive edge triggering for clock(50) occurs at t=0,100,200...
         state.get(out) must beSome((tick - delay + 100) % 100 < Sim.PosEdgeDelay)
       }
+    }
+  }
+
+  "A Switch" should {
+
+    "behave as a controlled switch" in forAll { (in: Option[LogicLevel], enable: LogicLevel) =>
+      val (out, state) = buildAndRun { switch(in.toPort, enable) }
+      state.get(out) must beEqualTo(if (enable == High) in.map(_.toBool) else None)
+    }
+
+    "behave well under any port change sequence" in {
+      val in, enable = newPort()
+      val (out, comp) = buildComponent { switch(in, enable) }
+
+      SequentialScenario(comp)
+        .withPorts(in -> None, enable -> Some(false))
+        .check { state =>
+          state.get(out) must beEqualTo(
+            if (state.get(enable) == Some(true)) state.get(in) else None
+          )
+        }
+        .run()
     }
   }
 }

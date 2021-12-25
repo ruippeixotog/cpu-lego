@@ -25,6 +25,10 @@ class PosEdge extends BaseComponent {
   val in, out = new Port
 }
 
+class Switch extends BaseComponent {
+  val in, out, enable = new Port
+}
+
 trait CompositeComponent extends Component {
   def components: List[Component]
   def wires: List[(Port, Port)]
