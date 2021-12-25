@@ -61,7 +61,7 @@ object Sim {
         state.watch(nand.in1, v1o => propagate(v1o, state.get(nand.in2)))
         state.watch(nand.in2, v2o => propagate(state.get(nand.in1), v2o))
 
-      case ff: Flipflop =>
+      case ff: FlipFlop =>
         def propagate(set: Option[Boolean], reset: Option[Boolean]): Unit = {
           val res = (set, reset) match {
             case (Some(true), Some(false)) => Some(true)

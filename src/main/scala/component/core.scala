@@ -12,7 +12,7 @@ def nand(in1: Port, in2: Port)(using env: BuilderEnv): Port = newComponent {
 }
 
 def flipflop(set: Port, reset: Port)(using env: BuilderEnv): (Port, Port) = newComponent {
-  val ff = new Flipflop
+  val ff = new FlipFlop
   env.add(ff)
   env.wire(set, ff.set)
   env.wire(reset, ff.reset)
