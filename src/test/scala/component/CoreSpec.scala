@@ -20,7 +20,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         case (Some(High), Some(High)) => Some(false)
         case _ => None
       }
-      val (out, state) = buildAndRun { implicit env => nand(in1.toPort, in2.toPort) }
+      val (out, state) = buildAndRun { nand(in1.toPort, in2.toPort) }
       state.get(out) must beEqualTo(expected)
     }
   }
@@ -28,26 +28,26 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
   "A Flipflop" should {
 
     "start unset" in {
-      val ((q, nq), state) = buildAndRun { implicit env => flipflop(new Port, new Port) }
+      val ((q, nq), state) = buildAndRun { flipflop(new Port, new Port) }
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "be set to High when S is set to High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => flipflop(High, Low) }
+      val ((q, nq), state) = buildAndRun { flipflop(High, Low) }
       state.get(q) must beSome(true)
       state.get(nq) must beSome(false)
     }
 
     "be set to Low when R is set to High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => flipflop(Low, High) }
+      val ((q, nq), state) = buildAndRun { flipflop(Low, High) }
       state.get(q) must beSome(false)
       state.get(nq) must beSome(true)
     }
 
     "retain its original value when both S and R are High" in {
       val set, reset = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => flipflop(set, reset) }
+      val ((q, nq), comp) = buildComponent { flipflop(set, reset) }
 
       def setInputs(s: Boolean, r: Boolean)(state: SimState): Unit = {
         state.schedule(0, PortChange(set, Some(s)))
@@ -72,7 +72,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
 
     "behave well under any combination of the above" in {
       val set, reset = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => flipflop(set, reset) }
+      val ((q, nq), comp) = buildComponent { flipflop(set, reset) }
 
       var expectedQ = Option.empty[Boolean]
 
@@ -103,14 +103,14 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
   "A Clock" should {
 
     "start at High" in {
-      val (out, comp) = buildComponent { implicit env => clock(100) }
+      val (out, comp) = buildComponent { clock(100) }
       val state = Sim.runComponent(comp, Some(0))
       state.get(out) must beSome(true)
     }
 
     "toggle its value according to its frequency" in {
       forAll(Gen.choose(10, 1000), Gen.choose(10, 1000)) { (freq, simEnd) =>
-        val (out, comp) = buildComponent { implicit env => clock(freq) }
+        val (out, comp) = buildComponent { clock(freq) }
         val state = Sim.runComponent(comp, Some(simEnd))
         state.get(out) must beSome((simEnd / freq) % 2 == 0)
       }
@@ -120,12 +120,12 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
   "A PosEdge" should {
 
     "output Low when unchanged" in forAll { (in: LogicLevel) =>
-      val (out, state) = buildAndRun { implicit env => posEdge(in) }
+      val (out, state) = buildAndRun { posEdge(in) }
       state.get(out) must beSome(false)
     }
 
     "output High when the input changes from Low to High" in {
-      val (out, comp) = buildComponent { implicit env => posEdge(clock(50)) }
+      val (out, comp) = buildComponent { posEdge(clock(50)) }
       // expected delay from clock out to posEdge out
       val delay = Sim.WireDelay + Sim.GateDelay
 

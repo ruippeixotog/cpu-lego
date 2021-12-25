@@ -16,45 +16,45 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A latchClocked" should {
 
     "start unset" in {
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(new Port, new Port, clock(100)) }
+      val ((q, nq), comp) = buildComponent { latchClocked(new Port, new Port, clock(100)) }
       val state = Sim.runComponent(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "remain unset while clk is Low" in {
-      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, Low) }
+      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, Low) }
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "be set to High when S is set to High and clk is High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, High) }
+      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, High) }
       state.get(q) must beSome(true)
       state.get(nq) must beSome(false)
     }
 
     "be set unconditionally to High when preset is Low" in {
-      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(Low, High, Low, preset = Low) }
+      val ((q, nq), state) = buildAndRun { latchClocked(Low, High, Low, preset = Low) }
       state.get(q) must beSome(true)
       state.get(nq) must beSome(false)
     }
 
     "be set to Low when R is set to High and clk is High" in {
-      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(Low, High, High) }
+      val ((q, nq), state) = buildAndRun { latchClocked(Low, High, High) }
       state.get(q) must beSome(false)
       state.get(nq) must beSome(true)
     }
 
     "be set unconditionally to Low when clear is Low" in {
-      val ((q, nq), state) = buildAndRun { implicit env => latchClocked(High, Low, Low, clear = Low) }
+      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, Low, clear = Low) }
       state.get(q) must beSome(false)
       state.get(nq) must beSome(true)
     }
 
     "retain its original value when both S and R are Low" in {
       val set, reset = new Port
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(set, reset, clock(100)) }
+      val ((q, nq), comp) = buildComponent { latchClocked(set, reset, clock(100)) }
 
       def setInputs(s: Boolean, r: Boolean)(state: SimState) = {
         state.schedule(0, PortChange(set, Some(s)))
@@ -79,7 +79,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave well under any combination of the above" in {
       val set, reset, clock = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => latchClocked(set, reset, clock) }
+      val ((q, nq), comp) = buildComponent { latchClocked(set, reset, clock) }
 
       var expectedQ = Option.empty[Boolean]
 
@@ -112,14 +112,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A dLatch" should {
 
     "start unset" in {
-      val ((q, nq), comp) = buildComponent { implicit env => dLatch(new Port, clock(100)) }
+      val ((q, nq), comp) = buildComponent { dLatch(new Port, clock(100)) }
       val state = Sim.runComponent(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "be set to the input on positive edge trigger" in forAll { (in: LogicLevel) =>
-      val ((q, nq), comp) = buildComponent { implicit env => dLatch(in, clock(100)) }
+      val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
       val state = Sim.runComponent(comp, Some(250))
       state.get(q) must beSome(in.toBool)
       state.get(nq) must beSome(!in.toBool)
@@ -127,7 +127,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "retain its original value outside positive edges" in {
       val in = new Port
-      val ((q, nq), comp) = buildComponent { implicit env => dLatch(in, clock(100)) }
+      val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
 
       def setInput(d: Boolean)(state: SimState) = {
         state.schedule(0, PortChange(in, Some(d)))
@@ -148,7 +148,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave well under any combination of the above" in {
       val d, clock = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => dLatch(d, clock) }
+      val ((q, nq), comp) = buildComponent { dLatch(d, clock) }
 
       var expectedQ = Option.empty[Boolean]
 
@@ -171,9 +171,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A jkMasterSlave" should {
 
     "start unset" in {
-      val ((q, nq), comp) = buildComponent { implicit env =>
-        jkMasterSlave(new Port, new Port, clock(100), High)
-      }
+      val ((q, nq), comp) = buildComponent { jkMasterSlave(new Port, new Port, clock(100), High) }
       val state = Sim.runComponent(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
@@ -181,7 +179,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "toggle the output when both inputs are High" in {
       val j, k, clear = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(j, k, clock(100), clear) }
+      val ((q, nq), comp) = buildComponent { jkMasterSlave(j, k, clock(100), clear) }
 
       def setClear(clr: Boolean)(state: SimState) =
         state.schedule(0, PortChange(clear, Some(clr)))
@@ -211,7 +209,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave as a JK master-slave flip-flop" in {
       val j, k, clk, clear = newPort()
-      val ((q, nq), comp) = buildComponent { implicit env => jkMasterSlave(j, k, clk, clear) }
+      val ((q, nq), comp) = buildComponent { jkMasterSlave(j, k, clk, clear) }
 
       var expectedQ = Option.empty[Boolean]
 
@@ -242,26 +240,24 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A register" should {
 
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
-      val (outs, comp) = buildComponent { implicit env =>
-        register(Array.fill(n)(new Port), Low, clock(100))
-      }
+      val (outs, comp) = buildComponent { register(Array.fill(n)(new Port), Low, clock(100)) }
       val state = Sim.runComponent(comp, Some(1000))
       foreach(outs) { out => state.get(out) must beNone }
     }
 
     "remain unset while clk is Low" in forAll { (ins: List[LogicLevel]) =>
-      val (outs, state) = buildAndRun { implicit env => register(ins, High, Low) }
+      val (outs, state) = buildAndRun { register(ins, High, Low) }
       foreach(outs) { out => state.get(out) must beNone }
     }
 
     "remain unset while load is Low" in forAll { (ins: List[LogicLevel]) =>
-      val (outs, comp) = buildComponent { implicit env => register(ins, Low, clock(100)) }
+      val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
       val state = Sim.runComponent(comp, Some(1000))
       foreach(outs) { out => state.get(out) must beNone }
     }
 
     "be set to the input on clock positive edge when load is High" in forAll { (ins: List[LogicLevel]) =>
-      val (outs, comp) = buildComponent { implicit env => register(ins, High, clock(100)) }
+      val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
       val state = Sim.runComponent(comp, Some(250))
       outs.map(state.get).sequence must beSome.which { bools =>
         bools must beEqualTo(ins.map(_.toBool))
@@ -269,14 +265,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
 
     "be set unconditionally to Low when clear is Low" in forAll { (ins: List[LogicLevel]) =>
-      val (outs, state) = buildAndRun { implicit env => register(ins, Low, Low, clear = Low) }
+      val (outs, state) = buildAndRun { register(ins, Low, Low, clear = Low) }
       outs.map(state.get).sequence must beSome(List.fill(ins.length)(false))
     }
 
     "retain its original value outside positive edges or when load is Low" in {
       val load = new Port
       val ins = Array.fill(4)(new Port)
-      val (outs, comp) = buildComponent { implicit env => register(ins, load, clock(100)) }
+      val (outs, comp) = buildComponent { register(ins, load, clock(100)) }
 
       def setInputs(load0: Boolean, ins0: List[Boolean])(state: SimState) = {
         state.schedule(0, PortChange(load, Some(load0)))
@@ -307,7 +303,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       forAll(Gen.choose(1, 10)) { n =>
         val xs = List.fill(n)(newPort())
         val load, clk, clear = newPort()
-        val (outs, comp) = buildComponent { implicit env => register(xs, load, clk, clear) }
+        val (outs, comp) = buildComponent { register(xs, load, clk, clear) }
 
         val inits = load -> Some(false) :: clk -> Some(true) :: clear -> Some(false) :: xs.map(_ -> None)
         var expectedOuts = List.fill(n)(Option.empty[Boolean])
@@ -337,7 +333,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "count the number of clock cycles when count is High" in {
       val clear = newPort()
-      val (outs, comp) = buildComponent { implicit env => counter(2, High, clock(100), clear) }
+      val (outs, comp) = buildComponent { counter(2, High, clock(100), clear) }
       outs must haveLength(2)
 
       def setClear(clr: Boolean)(state: SimState) =
@@ -363,7 +359,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "behave as a controlled binary counter" in {
       forAll(Gen.choose(1, 10)) { n =>
         val count, clk, clear = newPort()
-        val (outs, comp) = buildComponent { implicit env => counter(n, count, clk, clear) }
+        val (outs, comp) = buildComponent { counter(n, count, clk, clear) }
         outs must haveLength(n)
 
         var expectedOut = 0
@@ -392,7 +388,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "behave as a ring counter" in {
       forAll(Gen.choose(1, 10)) { n =>
         val clk, clear = newPort()
-        val (outs, comp) = buildComponent { implicit env => ringCounter(n, clk, clear) }
+        val (outs, comp) = buildComponent { ringCounter(n, clk, clear) }
         outs must haveLength(n)
 
         var expectedIdx = 0

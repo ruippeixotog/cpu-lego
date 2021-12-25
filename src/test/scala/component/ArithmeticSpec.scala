@@ -17,7 +17,7 @@ class ArithmeticSpec extends BaseSpec {
 
   "A fullAdder" should {
     "compute an addition with carry correctly" in forAll { (in1: LogicLevel, in2: LogicLevel, in3: LogicLevel) =>
-      val ((out, carry), state) = buildAndRun { implicit env => fullAdder(in1, in2, in3) }
+      val ((out, carry), state) = buildAndRun { fullAdder(in1, in2, in3) }
 
       val expected = List(in1, in2, in3).map(_.toInt).sum
       state.get(out) must beSome(expected % 2 == 1)
@@ -28,7 +28,7 @@ class ArithmeticSpec extends BaseSpec {
   "A binaryAdder" should {
     "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
       val (in1, in2) = ins.unzip
-      val ((outs, carry), state) = buildAndRun { implicit env => binaryAdder(in1, in2) }
+      val ((outs, carry), state) = buildAndRun { binaryAdder(in1, in2) }
 
       (outs :+ carry).map(state.get).sequence must beSome.which { bools =>
         bools.toInt must beEqualTo(in1.toInt + in2.toInt)
@@ -41,7 +41,7 @@ class ArithmeticSpec extends BaseSpec {
     "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
       val n = ins.length
       val (in1, in2) = ins.unzip
-      val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, Low) }
+      val (outs, state) = buildAndRun { addSub(in1, in2, Low) }
 
       outs.map(state.get).sequence must beSome.which { bools =>
         bools.toInt.truncate(n) must beEqualTo((in1.toInt + in2.toInt).truncate(n))
@@ -51,7 +51,7 @@ class ArithmeticSpec extends BaseSpec {
     "compute a subtraction correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
       val n = ins.length
       val (in1, in2) = ins.unzip
-      val (outs, state) = buildAndRun { implicit env => addSub(in1, in2, High) }
+      val (outs, state) = buildAndRun { addSub(in1, in2, High) }
 
       outs.map(state.get).sequence must beSome.which { bools =>
         bools.toInt.truncate(n) must beEqualTo((in1.toInt - in2.toInt).truncate(n))
