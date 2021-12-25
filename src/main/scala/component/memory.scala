@@ -46,3 +46,12 @@ def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High)(using env
 
 def counter(n: Int, count: Port, clk: Port, clear: Port)(using BuilderEnv): Seq[Port] =
   (1 to n).scanLeft(clk) { case (prev, _) => jkMasterSlave(count, count, not(prev), clear)._1 }.tail
+
+def ringCounter(n: Int, clk: Port, clear: Port)(using env: BuilderEnv): Seq[Port] = {
+  val aux1, aux2 = newPort()
+  val first = jkMasterSlave(aux1, aux2, clk, clear).swap
+  val outs = (2 to n).scanLeft(first) { case ((q, nq), _) => jkMasterSlave(q, nq, clk, clear) }
+  env.wire(outs.last._1, aux2)
+  env.wire(outs.last._2, aux1)
+  outs.map(_._1)
+}

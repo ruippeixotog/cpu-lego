@@ -386,4 +386,35 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       }
     }
   }
+
+  "A ring counter" should {
+
+    "behave as a ring counter" in {
+      forAll(Gen.choose(1, 10)) { n =>
+        val clk, clear = newPort()
+        val (outs, comp) = buildComponent { implicit env => ringCounter(n, clk, clear) }
+        outs must haveLength(n)
+
+        var expectedIdx = 0
+
+        SequentialScenario(comp)
+          .withPorts(clk -> Some(true), clear -> Some(false))
+          .onStart { _ => expectedIdx = 0 }
+          .onAction { (state, port, newVal, oldVal) =>
+            if (port == clk && newVal && oldVal == Some(false)) {
+              expectedIdx = (expectedIdx + 1) % n
+            }
+            if (state.get(clear) == Some(false)) {
+              expectedIdx = 0
+            }
+          }
+          .check { state =>
+            foreach(outs.zipWithIndex) { case (out, idx) =>
+              state.get(out) must beSome(idx == expectedIdx)
+            }
+          }
+          .run()
+      }
+    }
+  }
 }
