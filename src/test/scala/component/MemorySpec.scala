@@ -361,7 +361,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
 
     "behave as a controlled binary counter" in {
-      forAll(Gen.choose(1, 1)) { n =>
+      forAll(Gen.choose(1, 10)) { n =>
         val count, clk, clear = newPort()
         val (outs, comp) = buildComponent { implicit env => counter(n, count, clk, clear) }
         outs must haveLength(n)
@@ -370,7 +370,6 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         SequentialScenario(comp)
           .withPorts(count -> Some(false), clk -> Some(true), clear -> Some(false))
-          .withTestCases(List((clear, true), (count, true), (clk, false)))
           .onStart { _ => expectedOut = 0 }
           .onAction { (state, port, newVal, oldVal) =>
             if (port == clk && !newVal && oldVal == Some(true) && state.get(count) == Some(true)) {
