@@ -16,6 +16,7 @@ object BuilderAPI {
   // port operations
 
   inline def newPort(): Port = ${ BuilderAPIMacros.newPortImpl() }
+  inline def newPortVec(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newPortVecImpl('n) }
 
   extension (self: Port) {
     inline def ~>(port2: Port)(using env: BuilderEnv) =

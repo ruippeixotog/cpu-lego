@@ -299,16 +299,16 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave well under any combination of the above" in {
       forAll(Gen.choose(1, 10)) { n =>
-        val xs = List.fill(n)(newPort())
+        val xs = newPortVec(n)
         val load, clk, clear = newPort()
         val (outs, comp) = buildComponent { register(xs, load, clk, clear) }
 
-        val inits = load -> Some(false) :: clk -> Some(true) :: clear -> Some(false) :: xs.map(_ -> None)
-        var expectedOuts = List.fill(n)(Option.empty[Boolean])
+        val inits = List(load -> Some(false), clk -> Some(true), clear -> Some(false)) ++ xs.map(_ -> None)
+        var expectedOuts = Vector.fill(n)(Option.empty[Boolean])
 
         SequentialScenario(comp)
           .withPorts(inits: _*)
-          .onStart { _ => expectedOuts = List.fill(n)(Some(false)) }
+          .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { state =>
             if (state.get(load) == Some(true)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
@@ -318,7 +318,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
           .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
-              expectedOuts = List.fill(n)(Some(false))
+              expectedOuts = Vector.fill(n)(Some(false))
             }
           }
           .check { state =>
@@ -333,17 +333,17 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave as a three-state buffer register" in {
       forAll(Gen.choose(1, 10)) { n =>
-        val xs = List.fill(n)(newPort())
+        val xs = newPortVec(n)
         val load, enable, clk, clear = newPort()
         val (outs, comp) = buildComponent { bufferRegister(xs, load, enable, clk, clear) }
 
         val inits =
           List(load -> Some(false), enable -> Some(false), clk -> Some(true), clear -> Some(false)) ++ xs.map(_ -> None)
-        var expectedOuts = List.fill(n)(Option.empty[Boolean])
+        var expectedOuts = Vector.fill(n)(Option.empty[Boolean])
 
         SequentialScenario(comp)
           .withPorts(inits: _*)
-          .onStart { _ => expectedOuts = List.fill(n)(Some(false)) }
+          .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { state =>
             if (state.get(load) == Some(true)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
@@ -353,13 +353,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
           .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
-              expectedOuts = List.fill(n)(Some(false))
+              expectedOuts = Vector.fill(n)(Some(false))
             }
           }
           .check { state =>
             outs.map(state.get) must beEqualTo(
               if (state.get(enable) == Some(true)) expectedOuts
-              else List.fill(n)(None)
+              else Vector.fill(n)(None)
             )
           }
           .run()

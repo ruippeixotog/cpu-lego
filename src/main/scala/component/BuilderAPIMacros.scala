@@ -11,16 +11,23 @@ object BuilderAPIMacros {
     override def toString = ownerName.fold("")(_ + ".") + portName
   }
 
-  def newPortImpl()(using qctx: Quotes): Expr[Port] = {
+  def newPortVecImpl(n: Expr[Int])(using Quotes): Expr[Vector[Port]] =
+    '{ Vector.tabulate($n)(idx => ${ newPortImpl(Some('idx)) }) }
+
+  def newPortImpl()(using Quotes): Expr[Port] =
+    newPortImpl(None)
+
+  def newPortImpl(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
     import qctx.reflect._
 
-    def getClassOwner(sym: Symbol = Symbol.spliceOwner): Symbol = {
-      if (sym.isClassDef) sym else getClassOwner(sym.owner)
-    }
+    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
+    lazy val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
+    lazy val classOwner = owners.find(_.isClassDef).get
 
-    val portName = Expr(Symbol.spliceOwner.owner.name)
-    val thisRef = This(getClassOwner())
+    val portName = Expr(macroOwner.name)
+    val portNameWithIdx = idxExpr.fold(portName)(lbl => '{ $portName + "[" + $lbl + "]" })
 
+    val thisRef = This(classOwner)
     val fallbackOwnerExpr =
       if (thisRef.tpe <:< TypeRepr.of[Component]) Some('{ ${ thisRef.asExpr }.toString })
       else None
@@ -33,13 +40,16 @@ object BuilderAPIMacros {
         case (None, None) => '{ None }
       }
 
-    '{ new NamedPort($ownerExpr, $portName) }
+    '{ new NamedPort($ownerExpr, $portNameWithIdx) }
   }
 
   def newComponentImpl[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
     import qctx.reflect._
 
-    val compName = Expr(Symbol.spliceOwner.owner.name)
+    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
+    lazy val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
+
+    val compName = Expr(macroOwner.name)
 
     Expr.summon[BuilderEnv] match {
       case None =>
