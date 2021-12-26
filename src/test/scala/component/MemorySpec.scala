@@ -9,8 +9,11 @@ import testkit._
 
 class MemorySpec extends BaseSpec with SequentialScenarios {
 
-  given Arbitrary[List[LogicLevel]] = Arbitrary(
-    Gen.choose(1, 20).flatMap { n => Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary) }
+  given Arbitrary[Vector[LogicLevel]] = Arbitrary(
+    for {
+      n <- Gen.choose(1, 20)
+      xs <- Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary)
+    } yield xs.toVector
   )
 
   "A latchClocked" should {
@@ -238,23 +241,24 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
   "A register" should {
 
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
-      val (outs, comp) = buildComponent { register(Array.fill(n)(new Port), Low, clock(100)) }
-      val state = Sim.runComponent(comp, Some(1000))
-      foreach(outs) { out => state.get(out) must beNone }
-    }
-
-    "remain unset while clk is Low" in forAll { (ins: List[LogicLevel]) =>
-      val (outs, state) = buildAndRun { register(ins, High, Low) }
-      foreach(outs) { out => state.get(out) must beNone }
-    }
-
-    "remain unset while load is Low" in forAll { (ins: List[LogicLevel]) =>
+      val ins = newBus(n)
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
       val state = Sim.runComponent(comp, Some(1000))
       foreach(outs) { out => state.get(out) must beNone }
     }
 
-    "be set to the input on clock positive edge when load is High" in forAll { (ins: List[LogicLevel]) =>
+    "remain unset while clk is Low" in forAll { (ins: Vector[LogicLevel]) =>
+      val (outs, state) = buildAndRun { register(ins, High, Low) }
+      foreach(outs) { out => state.get(out) must beNone }
+    }
+
+    "remain unset while load is Low" in forAll { (ins: Vector[LogicLevel]) =>
+      val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
+      val state = Sim.runComponent(comp, Some(1000))
+      foreach(outs) { out => state.get(out) must beNone }
+    }
+
+    "be set to the input on clock positive edge when load is High" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
       val state = Sim.runComponent(comp, Some(250))
       outs.map(state.get).sequence must beSome.which { bools =>
@@ -262,14 +266,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       }
     }
 
-    "be set unconditionally to Low when clear is Low" in forAll { (ins: List[LogicLevel]) =>
+    "be set unconditionally to Low when clear is Low" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, state) = buildAndRun { register(ins, Low, Low, clear = Low) }
       outs.map(state.get).sequence must beSome(List.fill(ins.length)(false))
     }
 
     "retain its original value outside positive edges or when load is Low" in {
-      val load = new Port
-      val ins = Array.fill(4)(new Port)
+      val ins = newBus(4)
+      val load = newPort()
       val (outs, comp) = buildComponent { register(ins, load, clock(100)) }
 
       def setInputs(load0: Boolean, ins0: List[Boolean])(state: SimState) = {
@@ -299,7 +303,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "behave well under any combination of the above" in {
       forAll(Gen.choose(1, 10)) { n =>
-        val xs = newPortVec(n)
+        val xs = newBus(n)
         val load, clk, clear = newPort()
         val (outs, comp) = buildComponent { register(xs, load, clk, clear) }
 

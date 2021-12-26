@@ -11,8 +11,11 @@ import testkit._
 
 class ArithmeticSpec extends BaseSpec {
 
-  given Arbitrary[List[(LogicLevel, LogicLevel)]] = Arbitrary(
-    Gen.listOfN(20, summon[Arbitrary[(LogicLevel, LogicLevel)]].arbitrary)
+  given Arbitrary[Vector[(LogicLevel, LogicLevel)]] = Arbitrary(
+    for {
+      n <- Gen.choose(1, 20)
+      xs <- Gen.listOfN(n, summon[Arbitrary[(LogicLevel, LogicLevel)]].arbitrary)
+    } yield xs.toVector
   )
 
   "A fullAdder" should {
@@ -26,7 +29,7 @@ class ArithmeticSpec extends BaseSpec {
   }
 
   "A binaryAdder" should {
-    "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+    "compute an addition correctly" in forAll { (ins: Vector[(LogicLevel, LogicLevel)]) =>
       val (in1, in2) = ins.unzip
       val ((outs, carry), state) = buildAndRun { binaryAdder(in1, in2) }
 
@@ -38,7 +41,7 @@ class ArithmeticSpec extends BaseSpec {
 
   "An addSub" should {
 
-    "compute an addition correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+    "compute an addition correctly" in forAll { (ins: Vector[(LogicLevel, LogicLevel)]) =>
       val n = ins.length
       val (in1, in2) = ins.unzip
       val (outs, state) = buildAndRun { addSub(in1, in2, Low) }
@@ -48,7 +51,7 @@ class ArithmeticSpec extends BaseSpec {
       }
     }
 
-    "compute a subtraction correctly" in forAll { (ins: List[(LogicLevel, LogicLevel)]) =>
+    "compute a subtraction correctly" in forAll { (ins: Vector[(LogicLevel, LogicLevel)]) =>
       val n = ins.length
       val (in1, in2) = ins.unzip
       val (outs, state) = buildAndRun { addSub(in1, in2, High) }

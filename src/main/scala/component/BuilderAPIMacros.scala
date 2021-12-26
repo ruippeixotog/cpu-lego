@@ -11,7 +11,7 @@ object BuilderAPIMacros {
     override def toString = ownerName.fold("")(_ + ".") + portName
   }
 
-  def newPortVec(n: Expr[Int])(using Quotes): Expr[Vector[Port]] =
+  def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
     '{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) }
 
   def newPort()(using Quotes): Expr[Port] =

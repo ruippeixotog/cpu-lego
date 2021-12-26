@@ -34,7 +34,7 @@ def jkMasterSlave(j: Port, k: Port, clk: Port, clear: Port): Spec[(Port, Port)] 
   (q, nq)
 }
 
-def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High): Spec[Seq[Port]] =
+def register(xs: Bus, load: Port, clk: Port, clear: Port = High): Spec[Bus] =
   newComponent {
     val notLoad = not(load)
     xs.map { x =>
@@ -45,15 +45,15 @@ def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High): Spec[Seq
     }
   }
 
-def counter(n: Int, count: Port, clk: Port, clear: Port): Spec[Seq[Port]] = newComponent {
-  (1 to n).scanLeft(clk) { case (prev, _) => jkMasterSlave(count, count, not(prev), clear)._1 }.tail
+def counter(n: Int, count: Port, clk: Port, clear: Port): Spec[Bus] = newComponent {
+  (1 to n).scanLeft(clk) { case (prev, _) => jkMasterSlave(count, count, not(prev), clear)._1 }.tail.toVector
 }
 
-def ringCounter(n: Int, clk: Port, clear: Port): Spec[Seq[Port]] = newComponent {
+def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newComponent {
   val aux1, aux2 = newPort()
   val first = jkMasterSlave(aux1, aux2, clk, clear).swap
   val outs = (2 to n).scanLeft(first) { case ((q, nq), _) => jkMasterSlave(q, nq, clk, clear) }
   outs.last._1 ~> aux2
   outs.last._2 ~> aux1
-  outs.map(_._1)
+  outs.map(_._1).toVector
 }

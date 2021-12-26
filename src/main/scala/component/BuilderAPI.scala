@@ -11,20 +11,21 @@ object BuilderAPI {
     def wire(port1: Port, port2: Port): Unit
   }
 
+  type Bus = Vector[Port]
   type Spec[A] = BuilderEnv ?=> A
 
   // port operations
 
   inline def newPort(): Port = ${ BuilderAPIMacros.newPort() }
-  inline def newPortVec(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newPortVec('n) }
+  inline def newBus(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newBus('n) }
 
   extension (self: Port) {
     inline def ~>(port: Port)(using env: BuilderEnv) =
       env.wire(self, port)
   }
 
-  extension (self: Seq[Port]) {
-    inline def ~>(ports: Seq[Port])(using env: BuilderEnv) = {
+  extension (self: Bus) {
+    inline def ~>(ports: Bus)(using env: BuilderEnv) = {
       assert(self.length == ports.length, "Connected port vectors are not the same size")
       self.zip(ports).foreach(env.wire)
     }

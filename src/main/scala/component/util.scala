@@ -6,5 +6,5 @@ import core._
 def multi(f: (Port, Port) => Port)(ports: Port*): Port =
   ports.reduce(f)
 
-def buffered(enable: Port)(xs: Seq[Port]): Spec[Seq[Port]] =
+def buffered(enable: Port)(xs: Bus): Spec[Bus] =
   xs.map(switch(_, enable))

@@ -9,15 +9,15 @@ def fullAdder(in1: Port, in2: Port, in3: Port): Spec[(Port, Port)] = newComponen
   (out, carry)
 }
 
-def binaryAdder(ins1: Seq[Port], ins2: Seq[Port], carryIn: Port = Low): Spec[(Seq[Port], Port)] =
+def binaryAdder(ins1: Bus, ins2: Bus, carryIn: Port = Low): Spec[(Bus, Port)] =
   newComponent {
     val (outs, carry) = ins1.zip(ins2).foldLeft((List.empty[Port], carryIn)) { case ((prevOuts, prevCarry), (a, b)) =>
       val (out, carry) = fullAdder(a, b, prevCarry)
       (out :: prevOuts, carry)
     }
-    (outs.reverse, carry)
+    (outs.reverse.toVector, carry)
   }
 
-def addSub(ins1: Seq[Port], ins2: Seq[Port], sub: Port): Spec[Seq[Port]] = newComponent {
+def addSub(ins1: Bus, ins2: Bus, sub: Port): Spec[Bus] = newComponent {
   binaryAdder(ins1, ins2.map(xor(_, sub)), sub)._1
 }
