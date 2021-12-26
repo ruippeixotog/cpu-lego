@@ -26,7 +26,7 @@ val sap1: Spec[Bus] = newSpec {
 }
 
 case class ControlBus(con: Bus, clk: Port, clr: Port) {
-  val List(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con.toList
+  val Vector(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con
 }
 
 def controller(instr: Bus): Spec[ControlBus] = newSpec {
