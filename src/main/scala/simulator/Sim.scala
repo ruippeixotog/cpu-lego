@@ -85,30 +85,39 @@ object Sim {
 
       case posEdge: PosEdge =>
         state.schedule(0, PortChange(posEdge.out, Some(false)))
-        state.watch(posEdge.in, {
-          case Some(true) =>
-            state.schedule(GateDelay, PortChange(posEdge.out, Some(true)))
-            state.schedule(GateDelay + PosEdgeDelay, PortChange(posEdge.out, Some(false)))
-          case _ =>
+        state.watch(
+          posEdge.in,
+          {
+            case Some(true) =>
+              state.schedule(GateDelay, PortChange(posEdge.out, Some(true)))
+              state.schedule(GateDelay + PosEdgeDelay, PortChange(posEdge.out, Some(false)))
+            case _ =>
             // do nothing
-        })
-      
-      case switch: Switch =>
-        state.watch(switch.enable, {
-          case Some(true) => state.schedule(0, PortChange(switch.out, state.get(switch.in)))
-          case _ => state.schedule(0, PortChange(switch.out, None))
-        })
-        state.watch(switch.in, v => {
-          if(state.get(switch.enable) == Some(true)) {
-            state.schedule(0, PortChange(switch.out, v))
           }
-        })
+        )
+
+      case switch: Switch =>
+        state.watch(
+          switch.enable,
+          {
+            case Some(true) => state.schedule(0, PortChange(switch.out, state.get(switch.in)))
+            case _ => state.schedule(0, PortChange(switch.out, None))
+          }
+        )
+        state.watch(
+          switch.in,
+          v => {
+            if (state.get(switch.enable) == Some(true)) {
+              state.schedule(0, PortChange(switch.out, v))
+            }
+          }
+        )
     }
     state
   }
 
   def run(st: SimState, maxTicks: Option[Int] = None): SimState = {
-    if(st.debug) println("t=0: start simulation")
+    if (st.debug) println("t=0: start simulation")
 
     while (!st.events.isEmpty) {
       val (t1, evs) = st.events.head
@@ -123,7 +132,7 @@ object Sim {
       }
 
       for (ev <- sortedEvs) {
-        if(st.debug) println(s"t=$t1: $ev")
+        if (st.debug) println(s"t=$t1: $ev")
 
         ev match {
           case PortChange(port, newValue) =>

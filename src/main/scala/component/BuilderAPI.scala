@@ -12,6 +12,7 @@ object BuilderAPI {
   }
 
   type Bus = Vector[Port]
+
   type Spec[A] = BuilderEnv ?=> A
 
   // port operations
