@@ -19,8 +19,15 @@ object BuilderAPI {
   inline def newPortVec(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newPortVec('n) }
 
   extension (self: Port) {
-    inline def ~>(port2: Port)(using env: BuilderEnv) =
-      env.wire(self, port2)
+    inline def ~>(port: Port)(using env: BuilderEnv) =
+      env.wire(self, port)
+  }
+
+  extension (self: Seq[Port]) {
+    inline def ~>(ports: Seq[Port])(using env: BuilderEnv) = {
+      assert(self.length == ports.length, "Connected port vectors are not the same size")
+      self.zip(ports).foreach(env.wire)
+    }
   }
 
   // component operations
