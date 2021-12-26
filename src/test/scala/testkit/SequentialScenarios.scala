@@ -9,22 +9,33 @@ import org.specs2.mutable.Specification
 import simulator.{PortChange, Sim, SimState}
 
 trait SequentialScenarios { this: Specification with ScalaCheck =>
+  type ActionFunc = (SimState, Port, Boolean, Option[Boolean]) => Unit
 
   case class SequentialScenario(
       comp: Component,
       ports: Seq[(Port, Option[Boolean])] = Nil,
       testCases: Seq[Seq[(Port, Boolean)]] = Nil,
       onStartFunc: SimState => Unit = _ => {},
-      filterFunc: SimState => Boolean = _ => true,
-      beforeActionFunc: (SimState, Port, Boolean, Option[Boolean]) => Unit = (_, _, _, _) => {},
-      onActionFunc: (SimState, Port, Boolean, Option[Boolean]) => Unit = (_, _, _, _) => {},
+      beforeActionFuncs: Seq[ActionFunc] = Vector(),
+      onActionFuncs: Seq[ActionFunc] = Vector(),
       checkFunc: SimState => Result = _ => ok
   ) {
     def withPorts(ports: (Port, Option[Boolean])*) = copy(ports = ports)
     def withTestCases(testCases: Seq[(Port, Boolean)]*) = copy(testCases = testCases)
+
     def onStart(f: SimState => Unit) = copy(onStartFunc = f)
-    def beforeAction(f: (SimState, Port, Boolean, Option[Boolean]) => Unit) = copy(beforeActionFunc = f)
-    def onAction(f: (SimState, Port, Boolean, Option[Boolean]) => Unit) = copy(onActionFunc = f)
+    def beforeAction(f: ActionFunc) = copy(beforeActionFuncs = beforeActionFuncs :+ f)
+    def onAction(f: ActionFunc) = copy(onActionFuncs = onActionFuncs :+ f)
+
+    def onPosEdge(port: Port)(f: SimState => Unit) = onAction {
+      case (state, `port`, true, oldVal) if oldVal != Some(true) => f(state)
+      case _ => // do nothing
+    }
+    def onNegEdge(port: Port)(f: SimState => Unit) = onAction {
+      case (state, `port`, false, oldVal) if oldVal != Some(false) => f(state)
+      case _ => // do nothing
+    }
+
     def check(f: SimState => Result) = copy(checkFunc = f)
 
     def run(): Prop = {
@@ -44,12 +55,12 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
 
       foreach(actions) { case (port, newVal) =>
         val oldVal = state.get(port)
-        beforeActionFunc(state, port, newVal, oldVal)
+        beforeActionFuncs.foreach(_(state, port, newVal, oldVal))
 
         state.schedule(0, PortChange(port, Some(newVal)))
         state = Sim.run(state)
 
-        onActionFunc(state, port, newVal, oldVal)
+        onActionFuncs.foreach(_(state, port, newVal, oldVal))
         checkFunc(state)
       }
     }

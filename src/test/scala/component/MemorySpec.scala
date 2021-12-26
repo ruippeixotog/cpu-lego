@@ -155,10 +155,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       SequentialScenario(comp)
         .withPorts(d -> None, clock -> Some(true))
         .onStart { _ => expectedQ = None }
-        .onAction {
-          case (state, `clock`, true, Some(false)) =>
-            expectedQ = state.get(d).orElse(expectedQ)
-          case _ => // do nothing
+        .onPosEdge(clock) { state =>
+          expectedQ = state.get(d).orElse(expectedQ)
         }
         .check { state =>
           state.get(q) must beEqualTo(expectedQ)
@@ -216,15 +214,15 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       SequentialScenario(comp)
         .withPorts(j -> Some(false), k -> Some(false), clk -> Some(true), clear -> Some(false))
         .onStart { _ => expectedQ = Some(false) }
-        .onAction { (state, port, newVal, oldVal) =>
-          if (port == clk && newVal && oldVal == Some(false)) {
-            expectedQ = (state.get(j), state.get(k)) match {
-              case (Some(true), Some(false)) => Some(true)
-              case (Some(false), Some(true)) => Some(false)
-              case (Some(true), Some(true)) => expectedQ.map(!_)
-              case _ => expectedQ
-            }
+        .onPosEdge(clk) { state =>
+          expectedQ = (state.get(j), state.get(k)) match {
+            case (Some(true), Some(false)) => Some(true)
+            case (Some(false), Some(true)) => Some(false)
+            case (Some(true), Some(true)) => expectedQ.map(!_)
+            case _ => expectedQ
           }
+        }
+        .onAction { (state, _, _, _) =>
           if (state.get(clear) == Some(false)) {
             expectedQ = Some(false)
           }
@@ -311,12 +309,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(inits: _*)
           .onStart { _ => expectedOuts = List.fill(n)(Some(false)) }
-          .onAction { (state, port, newVal, oldVal) =>
-            if (port == clk && newVal && oldVal == Some(false) && state.get(load) == Some(true)) {
+          .onPosEdge(clk) { state =>
+            if (state.get(load) == Some(true)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
                 state.get(x).orElse(curr)
               }
             }
+          }
+          .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
               expectedOuts = List.fill(n)(Some(false))
             }
@@ -367,10 +367,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(count -> Some(false), clk -> Some(true), clear -> Some(false))
           .onStart { _ => expectedOut = 0 }
-          .onAction { (state, port, newVal, oldVal) =>
-            if (port == clk && !newVal && oldVal == Some(true) && state.get(count) == Some(true)) {
+          .onNegEdge(clk) { state =>
+            if (state.get(count) == Some(true)) {
               expectedOut = (expectedOut + 1) % (1 << n)
             }
+          }
+          .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
               expectedOut = 0
             }
@@ -396,10 +398,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(clk -> Some(true), clear -> Some(false))
           .onStart { _ => expectedIdx = 0 }
-          .onAction { (state, port, newVal, oldVal) =>
-            if (port == clk && newVal && oldVal == Some(false)) {
-              expectedIdx = (expectedIdx + 1) % n
-            }
+          .onPosEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
+          .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
               expectedIdx = 0
             }
