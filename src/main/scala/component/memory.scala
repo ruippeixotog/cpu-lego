@@ -1,6 +1,6 @@
 package component
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import core._
 
 // non-intrinsic version of `flipflop`

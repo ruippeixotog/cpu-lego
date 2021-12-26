@@ -1,6 +1,6 @@
 package component
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import core._
 
 def fullAdder(in1: Port, in2: Port, in3: Port)(using BuilderEnv): (Port, Port) = newComponent {

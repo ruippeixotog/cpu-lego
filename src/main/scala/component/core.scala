@@ -1,6 +1,6 @@
 package component
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import core._
 
 def nand(in1: Port, in2: Port)(using env: BuilderEnv): Port = newComponent {

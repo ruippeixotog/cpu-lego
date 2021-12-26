@@ -2,7 +2,7 @@ package component
 
 import core._
 
-object BuilderDSL {
+object BuilderAPI {
 
   trait BuilderEnv {
     def componentName: Option[String]
@@ -11,10 +11,10 @@ object BuilderDSL {
     def wire(port1: Port, port2: Port): Unit
   }
 
-  inline def newPort(): Port = ${ BuilderDSLMacros.newPortImpl() }
+  inline def newPort(): Port = ${ BuilderAPIMacros.newPortImpl() }
 
   inline def newComponent[A](inline build: BuilderEnv ?=> A)(using BuilderEnv): A =
-    ${ BuilderDSLMacros.newComponentImpl('build) }
+    ${ BuilderAPIMacros.newComponentImpl('build) }
 
   def buildComponent[A](build: BuilderEnv ?=> A): (A, Component) =
     buildComponent(None, build)

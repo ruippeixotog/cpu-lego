@@ -1,6 +1,6 @@
 package simulator
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import component._
 import core._
 import org.scalacheck.Prop.forAll

@@ -2,7 +2,7 @@ package testkit
 
 import scala.annotation.targetName
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}

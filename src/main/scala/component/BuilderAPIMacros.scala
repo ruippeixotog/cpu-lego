@@ -2,10 +2,10 @@ package component
 
 import scala.quoted._
 
-import component.BuilderDSL._
+import component.BuilderAPI._
 import core._
 
-object BuilderDSLMacros {
+object BuilderAPIMacros {
 
   class NamedPort(ownerName: String, portName: String) extends Port {
     override def toString = s"$ownerName.$portName"
@@ -43,7 +43,7 @@ object BuilderDSLMacros {
       case Some(env) =>
         '{
           val fullCompName = $env.componentName.fold("")(_ + ".") + $compName
-          val (res, comp) = BuilderDSL.buildComponent(Some(fullCompName), $blockExpr)
+          val (res, comp) = buildComponent(Some(fullCompName), $blockExpr)
           $env.add(comp)
           // type cast needed because `buildComponent` is getting incorrectly recognized
           res.asInstanceOf[A]
