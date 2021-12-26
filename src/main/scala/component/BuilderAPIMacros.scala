@@ -31,7 +31,7 @@ object BuilderAPIMacros {
     '{ new NamedPort($ownerExpr, $portName) }
   }
 
-  def newComponentImpl[A: Type](blockExpr: Expr[BuilderEnv ?=> A])(using qctx: Quotes): Expr[A] = {
+  def newComponentImpl[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
     import qctx.reflect._
 
     val compName = Expr(Symbol.spliceOwner.owner.name)
@@ -43,7 +43,7 @@ object BuilderAPIMacros {
       case Some(env) =>
         '{
           val fullCompName = $env.componentName.fold("")(_ + ".") + $compName
-          val (res, comp) = buildComponent(Some(fullCompName), $blockExpr)
+          val (res, comp) = buildComponent(Some(fullCompName), $spec)
           $env.add(comp)
           // type cast needed because `buildComponent` is getting incorrectly recognized
           res.asInstanceOf[A]

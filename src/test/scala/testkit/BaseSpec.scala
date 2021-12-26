@@ -21,8 +21,8 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   // --- Utility methods ---
 
-  def buildAndRun[A](buildFunc: BuilderEnv ?=> A): (A, SimState) = {
-    val (res, comp) = buildComponent(buildFunc)
+  def buildAndRun[A](spec: Spec[A]): (A, SimState) = {
+    val (res, comp) = buildComponent(spec)
     (res, Sim.runComponent(comp))
   }
 

@@ -11,19 +11,30 @@ object BuilderAPI {
     def wire(port1: Port, port2: Port): Unit
   }
 
+  type Spec[A] = BuilderEnv ?=> A
+
+  // port operations
+
   inline def newPort(): Port = ${ BuilderAPIMacros.newPortImpl() }
 
-  inline def newComponent[A](inline build: BuilderEnv ?=> A)(using BuilderEnv): A =
-    ${ BuilderAPIMacros.newComponentImpl('build) }
+  extension (self: Port) {
+    inline def ~>(port2: Port)(using env: BuilderEnv) =
+      env.wire(self, port2)
+  }
 
-  def buildComponent[A](build: BuilderEnv ?=> A): (A, Component) =
-    buildComponent(None, build)
+  // component operations
 
-  def buildComponent[A](name: Option[String], build: BuilderEnv ?=> A): (A, Component) = {
+  inline def newComponent[A](inline spec: Spec[A])(using BuilderEnv): A =
+    ${ BuilderAPIMacros.newComponentImpl('spec) }
+
+  def buildComponent[A](spec: Spec[A]): (A, Component) =
+    buildComponent(None, spec)
+
+  def buildComponent[A](name: Option[String], spec: Spec[A]): (A, Component) = {
     var components0 = List.empty[Component]
     var wires0 = List.empty[(Port, Port)]
 
-    given BuilderEnv = new BuilderEnv {
+    val env = new BuilderEnv {
       def componentName = name
 
       def add(c: Component) = components0 = c :: components0
@@ -31,7 +42,7 @@ object BuilderAPI {
     }
 
     return (
-      build,
+      spec(using env),
       new CompositeComponent {
         val components = components0
         val wires = wires0
