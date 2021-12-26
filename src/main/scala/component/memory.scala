@@ -45,11 +45,6 @@ def register(xs: Seq[Port], load: Port, clk: Port, clear: Port = High): Spec[Seq
     }
   }
 
-def bufferRegister(xs: Seq[Port], load: Port, enable: Port, clk: Port, clear: Port = High): Spec[Seq[Port]] =
-  newComponent {
-    register(xs, load, clk, clear).map(switch(_, enable))
-  }
-
 def counter(n: Int, count: Port, clk: Port, clear: Port): Spec[Seq[Port]] = newComponent {
   (1 to n).scanLeft(clk) { case (prev, _) => jkMasterSlave(count, count, not(prev), clear)._1 }.tail
 }
