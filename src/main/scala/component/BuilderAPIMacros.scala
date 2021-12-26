@@ -43,7 +43,7 @@ object BuilderAPIMacros {
     '{ new NamedPort($ownerExpr, $portNameWithIdx) }
   }
 
-  def newComponent[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
+  def newSpec[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
     import qctx.reflect._
 
     def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)

@@ -34,8 +34,8 @@ object BuilderAPI {
 
   // component operations
 
-  inline def newComponent[A](inline spec: Spec[A])(using BuilderEnv): A =
-    ${ BuilderAPIMacros.newComponent('spec) }
+  inline def newSpec[A](inline spec: Spec[A])(using BuilderEnv): A =
+    ${ BuilderAPIMacros.newSpec('spec) }
 
   def buildComponent[A](spec: Spec[A]): (A, Component) =
     buildComponent(None, spec)
