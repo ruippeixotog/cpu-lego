@@ -329,6 +329,44 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
+  "A bufferRegister" should {
+
+    "behave as a three-state buffer register" in {
+      forAll(Gen.choose(1, 10)) { n =>
+        val xs = List.fill(n)(newPort())
+        val load, enable, clk, clear = newPort()
+        val (outs, comp) = buildComponent { bufferRegister(xs, load, enable, clk, clear) }
+
+        val inits =
+          List(load -> Some(false), enable -> Some(false), clk -> Some(true), clear -> Some(false)) ++ xs.map(_ -> None)
+        var expectedOuts = List.fill(n)(Option.empty[Boolean])
+
+        SequentialScenario(comp)
+          .withPorts(inits: _*)
+          .onStart { _ => expectedOuts = List.fill(n)(Some(false)) }
+          .onPosEdge(clk) { state =>
+            if (state.get(load) == Some(true)) {
+              expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
+                state.get(x).orElse(curr)
+              }
+            }
+          }
+          .onAction { (state, _, _, _) =>
+            if (state.get(clear) == Some(false)) {
+              expectedOuts = List.fill(n)(Some(false))
+            }
+          }
+          .check { state =>
+            outs.map(state.get) must beEqualTo(
+              if (state.get(enable) == Some(true)) expectedOuts
+              else List.fill(n)(None)
+            )
+          }
+          .run()
+      }
+    }
+  }
+
   "A counter" should {
 
     "count the number of clock cycles when count is High" in {
