@@ -11,13 +11,13 @@ object BuilderAPIMacros {
     override def toString = ownerName.fold("")(_ + ".") + portName
   }
 
-  def newPortVecImpl(n: Expr[Int])(using Quotes): Expr[Vector[Port]] =
-    '{ Vector.tabulate($n)(idx => ${ newPortImpl(Some('idx)) }) }
+  def newPortVec(n: Expr[Int])(using Quotes): Expr[Vector[Port]] =
+    '{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) }
 
-  def newPortImpl()(using Quotes): Expr[Port] =
-    newPortImpl(None)
+  def newPort()(using Quotes): Expr[Port] =
+    newPort(None)
 
-  def newPortImpl(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
+  def newPort(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
     import qctx.reflect._
 
     def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
@@ -43,7 +43,7 @@ object BuilderAPIMacros {
     '{ new NamedPort($ownerExpr, $portNameWithIdx) }
   }
 
-  def newComponentImpl[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
+  def newComponent[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
     import qctx.reflect._
 
     def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)

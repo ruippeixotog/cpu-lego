@@ -15,8 +15,8 @@ object BuilderAPI {
 
   // port operations
 
-  inline def newPort(): Port = ${ BuilderAPIMacros.newPortImpl() }
-  inline def newPortVec(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newPortVecImpl('n) }
+  inline def newPort(): Port = ${ BuilderAPIMacros.newPort() }
+  inline def newPortVec(inline n: Int): Vector[Port] = ${ BuilderAPIMacros.newPortVec('n) }
 
   extension (self: Port) {
     inline def ~>(port2: Port)(using env: BuilderEnv) =
@@ -26,7 +26,7 @@ object BuilderAPI {
   // component operations
 
   inline def newComponent[A](inline spec: Spec[A])(using BuilderEnv): A =
-    ${ BuilderAPIMacros.newComponentImpl('spec) }
+    ${ BuilderAPIMacros.newComponent('spec) }
 
   def buildComponent[A](spec: Spec[A]): (A, Component) =
     buildComponent(None, spec)
