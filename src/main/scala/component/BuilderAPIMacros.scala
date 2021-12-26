@@ -7,8 +7,8 @@ import core._
 
 object BuilderAPIMacros {
 
-  class NamedPort(ownerName: String, portName: String) extends Port {
-    override def toString = s"$ownerName.$portName"
+  class NamedPort(ownerName: Option[String], portName: String) extends Port {
+    override def toString = ownerName.fold("")(_ + ".") + portName
   }
 
   def newPortImpl()(using qctx: Quotes): Expr[Port] = {
@@ -19,13 +19,18 @@ object BuilderAPIMacros {
     }
 
     val portName = Expr(Symbol.spliceOwner.owner.name)
+    val thisRef = This(getClassOwner())
 
-    val fallbackOwnerExpr = '{ ${ This(getClassOwner()).asExpr }.toString }
+    val fallbackOwnerExpr =
+      if (thisRef.tpe <:< TypeRepr.of[Component]) Some('{ ${ thisRef.asExpr }.toString })
+      else None
 
     val ownerExpr =
-      Expr.summon[BuilderEnv] match {
-        case Some(env) => '{ $env.componentName.getOrElse($fallbackOwnerExpr) }
-        case None => fallbackOwnerExpr
+      (Expr.summon[BuilderEnv], fallbackOwnerExpr) match {
+        case (Some(env), Some(fallback)) => '{ Some($env.componentName.getOrElse($fallback)) }
+        case (Some(env), None) => '{ $env.componentName }
+        case (None, Some(fallback)) => '{ Some($fallback) }
+        case (None, None) => '{ None }
       }
 
     '{ new NamedPort($ownerExpr, $portName) }
