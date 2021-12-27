@@ -10,3 +10,8 @@ def decoder(ins: Bus, enable: Port): Spec[Bus] = newSpec {
   }
   aux(ins, enable)
 }
+
+def mux(ins: Bus, sel: Bus): Spec[Port] = newSpec {
+  assert(ins.length == (1 << sel.length), "Input and address bus sizes do not match")
+  ins.zip(decoder(sel, High)).map(and).reduce(or)
+}

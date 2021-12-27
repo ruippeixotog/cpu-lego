@@ -11,7 +11,7 @@ class ControlSpec extends BaseSpec {
   given Arbitrary[Vector[LogicLevel]] = Arbitrary(
     for {
       n <- Gen.choose(1, 5)
-      xs <- Gen.listOfN(n, summon[Arbitrary[LogicLevel]].arbitrary)
+      xs <- Gen.listOfN(n, genLogicLevel)
     } yield xs.toVector
   )
 
@@ -27,6 +27,23 @@ class ControlSpec extends BaseSpec {
           state.get(out) must beEqualTo(Some(enable.toBool && idx == expectedIdx))
         }
       }
+    }
+  }
+
+  "A mux" should {
+
+    "act as an N-to-1 multiplexer" in {
+      forAll { (sel: Vector[LogicLevel]) =>
+        forAll(Gen.listOfN(1 << sel.length, genLogicLevel).map(_.toVector)) { ins =>
+          val (out, state) = buildAndRun { mux(ins, sel) }
+          state.get(out) must beSome(ins(sel.toInt).toBool)
+        }
+      }
+    }
+
+    "throw when the input bus size and the address size do not match" in {
+      val ins, sel = newBus(3)
+      buildAndRun { mux(ins, sel) } must throwAn[AssertionError]
     }
   }
 }
