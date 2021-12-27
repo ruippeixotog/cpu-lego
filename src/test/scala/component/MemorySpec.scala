@@ -417,4 +417,41 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       }
     }
   }
+
+  "A RAM" should {
+
+    "behave as a random access memory" in {
+      forAll(Gen.choose(1, 4), Gen.choose(1, 6)) { (inN, addrN) =>
+        val ins = newBus(inN)
+        val addr = newBus(addrN)
+        val we, ce = newPort()
+        val (outs, comp) = buildComponent { ram(ins, addr, we, ce) }
+        outs must haveLength(inN)
+
+        var mem: Array[Vector[Option[Boolean]]] = Array.fill(1 << addrN)(Vector.fill(inN)(None))
+
+        def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
+
+        SequentialScenario(comp)
+          .withPorts(
+            List(we -> Some(false), ce -> Some(false)) ++
+              ins.map(_ -> Some(false)) ++
+              addr.map(_ -> Some(false)): _*
+          )
+          .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
+          .onAction { (state, _, _, _) =>
+            if (state.get(we) == Some(true)) {
+              mem(addrIdx(state)) = ins.map(state.get)
+            }
+          }
+          .check { state =>
+            outs.map(state.get) must beEqualTo(
+              if (state.get(ce) == Some(true)) mem(addrIdx(state))
+              else Vector.fill(inN)(None)
+            )
+          }
+          .run()
+      }
+    }
+  }
 }

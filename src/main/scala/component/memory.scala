@@ -55,3 +55,11 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
   outs.last._2 ~> aux1
   outs.map(_._1).toVector
 }
+
+def ram(ins: Bus, addr: Bus, we: Port, ce: Port): Spec[Bus] = newSpec {
+  val select = decoder(addr, High)
+  val outs = ins.map { in =>
+    select.map { sel => and(sel, latchClocked(in, not(in), and(we, sel))._1) }.reduce(or)
+  }
+  buffered(ce)(outs)
+}
