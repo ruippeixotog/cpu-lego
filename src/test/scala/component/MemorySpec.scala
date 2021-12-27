@@ -169,10 +169,10 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
-  "A jkMasterSlave" should {
+  "A jkFlipFlop" should {
 
     "start unset" in {
-      val ((q, nq), comp) = buildComponent { jkMasterSlave(new Port, new Port, clock(100), High) }
+      val ((q, nq), comp) = buildComponent { jkFlipFlop(new Port, new Port, clock(100), High) }
       val state = Sim.runComponent(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
@@ -180,7 +180,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "toggle the output when both inputs are High" in {
       val j, k, clear = newPort()
-      val ((q, nq), comp) = buildComponent { jkMasterSlave(j, k, clock(100), clear) }
+      val ((q, nq), comp) = buildComponent { jkFlipFlop(j, k, clock(100), clear) }
 
       def setClear(clr: Boolean)(state: SimState) =
         state.schedule(0, PortChange(clear, Some(clr)))
@@ -208,9 +208,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       )
     }
 
-    "behave as a JK master-slave flip-flop" in {
+    "behave as a JK flip-flop" in {
       val j, k, clk, clear = newPort()
-      val ((q, nq), comp) = buildComponent { jkMasterSlave(j, k, clk, clear) }
+      val ((q, nq), comp) = buildComponent { jkFlipFlop(j, k, clk, clear) }
 
       var expectedQ = Option.empty[Boolean]
 
