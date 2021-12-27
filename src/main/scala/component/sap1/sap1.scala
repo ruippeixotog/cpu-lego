@@ -4,17 +4,17 @@ import component.BuilderAPI._
 import component._
 import core._
 
-case class MemInput(prog: Port, write: Port, addr: Bus, data: Bus)
+case class Input(prog: Port, write: Port, addr: Bus, data: Bus, clr: Port, step: Port, auto: Port)
 
 case class ControlBus(con: Bus, clk: Port, clr: Port) {
   val Vector(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con
 }
 
-def sap1(memIn: MemInput): Spec[Bus] = newSpec {
+def sap1(sapIn: Input): Spec[Bus] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
-  val ctrl = controller(instr)
+  val ctrl = controller(sapIn, instr)
   import ctrl._
 
   instrRegister(bus, li, clk, clr, ei) ~> instr
@@ -22,7 +22,7 @@ def sap1(memIn: MemInput): Spec[Bus] = newSpec {
   progCounter(bus, cp, not(clk), not(clr), ep)
 
   val mOut = register(bus.take(4), lm, clk)
-  ram(bus, mOut, ce, memIn)
+  ram(bus, mOut, ce, sapIn)
 
   val aOut = accumulator(bus, clk, la, ea)
   val bOut = register(bus, lb, clk)
@@ -31,8 +31,13 @@ def sap1(memIn: MemInput): Spec[Bus] = newSpec {
   register(bus, lo, clk)
 }
 
-def controller(instr: Bus): Spec[ControlBus] = newSpec {
-  ???
+def controller(sapIn: Input, instr: Bus): Spec[ControlBus] = newSpec {
+  val (clr, _) = flipflop(sapIn.clr, not(sapIn.clr))
+  val (step, _) = flipflop(sapIn.step, not(sapIn.step))
+  val (manual, auto) = flipflop(not(sapIn.auto), sapIn.auto)
+  val clk = nand(nand(step, manual), nand(auto, clock(10000)))
+
+  ControlBus(???, clk, clr)
 }
 
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
@@ -45,13 +50,13 @@ def progCounter(bus: Bus, count: Port, clk: Port, clr: Port, enable: Port): Spec
   buffered(enable)(counter(4, count, clk, clr)) ~> bus.take(4)
 }
 
-def inputAndMar(bus: Bus, load: Port, memIn: MemInput, clk: Port): Spec[Bus] = newSpec {
+def inputAndMar(bus: Bus, load: Port, sapIn: Input, clk: Port): Spec[Bus] = newSpec {
   val mOut = register(bus.take(4), load, clk)
-  mOut.zip(memIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(memIn.prog)) }
+  mOut.zip(sapIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(sapIn.prog)) }
 }
 
-def ram(bus: Bus, addr: Bus, ce: Port, memIn: MemInput): Spec[Unit] = newSpec {
-  component.ram(memIn.data, addr, memIn.write, and(ce, not(memIn.prog))) ~> bus
+def ram(bus: Bus, addr: Bus, ce: Port, sapIn: Input): Spec[Unit] = newSpec {
+  component.ram(sapIn.data, addr, sapIn.write, and(ce, not(sapIn.prog))) ~> bus
 }
 
 def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newSpec {
