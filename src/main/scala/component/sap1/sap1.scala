@@ -15,8 +15,10 @@ val sap1: Spec[Bus] = newSpec {
 
   progCounter(bus, cp, not(clk), not(clr), ep)
 
-  val (b1, b2) = inputAndMar(bus, lm, clk)
-  ram(bus, b1, b2, ce)
+  // TODO: support programming RAM
+  val memProg = newBus(8)
+  val addr = mar(bus, lm, clk)
+  ram(memProg, addr, Low, ce)
 
   val aOut = accumulator(bus, clk, la, ea)
   val bOut = register(bus, lb, clk)
@@ -43,12 +45,9 @@ def progCounter(bus: Bus, count: Port, clk: Port, clr: Port, enable: Port): Spec
   buffered(enable)(counter(4, count, clk, clr)) ~> bus.take(4)
 }
 
-def inputAndMar(bus: Bus, load: Port, clk: Port): Spec[(Bus, Bus)] = newSpec {
-  ???
-}
-
-def ram(bus: Bus, b1: Bus, b2: Bus, ce: Port): Spec[Unit] = newSpec {
-  ???
+// TODO: support input too (RAM programming)
+def mar(bus: Bus, load: Port, clk: Port): Spec[Bus] = newSpec {
+  register(bus.take(4), load, clk)
 }
 
 def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newSpec {
