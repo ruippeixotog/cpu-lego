@@ -4,7 +4,13 @@ import component.BuilderAPI._
 import component._
 import core._
 
-val sap1: Spec[Bus] = newSpec {
+case class MemInput(prog: Port, write: Port, addr: Bus, data: Bus)
+
+case class ControlBus(con: Bus, clk: Port, clr: Port) {
+  val Vector(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con
+}
+
+def sap1(memIn: MemInput): Spec[Bus] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
@@ -15,20 +21,14 @@ val sap1: Spec[Bus] = newSpec {
 
   progCounter(bus, cp, not(clk), not(clr), ep)
 
-  // TODO: support programming RAM
-  val memProg = newBus(8)
-  val addr = mar(bus, lm, clk)
-  ram(memProg, addr, Low, ce)
+  val mOut = register(bus.take(4), lm, clk)
+  ram(bus, mOut, ce, memIn)
 
   val aOut = accumulator(bus, clk, la, ea)
   val bOut = register(bus, lb, clk)
   alu(bus, aOut, bOut, su, eu)
 
   register(bus, lo, clk)
-}
-
-case class ControlBus(con: Bus, clk: Port, clr: Port) {
-  val Vector(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con
 }
 
 def controller(instr: Bus): Spec[ControlBus] = newSpec {
@@ -45,9 +45,13 @@ def progCounter(bus: Bus, count: Port, clk: Port, clr: Port, enable: Port): Spec
   buffered(enable)(counter(4, count, clk, clr)) ~> bus.take(4)
 }
 
-// TODO: support input too (RAM programming)
-def mar(bus: Bus, load: Port, clk: Port): Spec[Bus] = newSpec {
-  register(bus.take(4), load, clk)
+def inputAndMar(bus: Bus, load: Port, memIn: MemInput, clk: Port): Spec[Bus] = newSpec {
+  val mOut = register(bus.take(4), load, clk)
+  mOut.zip(memIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(memIn.prog)) }
+}
+
+def ram(bus: Bus, addr: Bus, ce: Port, memIn: MemInput): Spec[Unit] = newSpec {
+  component.ram(memIn.data, addr, memIn.write, and(ce, not(memIn.prog))) ~> bus
 }
 
 def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newSpec {
