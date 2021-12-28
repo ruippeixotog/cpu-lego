@@ -402,7 +402,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(clk -> Some(true), clear -> Some(false))
           .onStart { _ => expectedIdx = 0 }
-          .onPosEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
+          .onNegEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
           .onAction { (state, _, _, _) =>
             if (state.get(clear) == Some(false)) {
               expectedIdx = 0
