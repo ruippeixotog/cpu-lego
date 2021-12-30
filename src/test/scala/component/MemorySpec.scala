@@ -389,6 +389,41 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
+  "A presettableCounter" should {
+
+    "behave as a pressetable binary counter" in {
+      forAll(Gen.choose(1, 10)) { n =>
+        val ps = newBus(n)
+        val load, clk, clear = newPort()
+        val (outs, comp) = buildComponent { presettableCounter(ps, load, clk, clear) }
+        outs must haveLength(n)
+
+        var expectedOut = 0
+
+        SequentialScenario(comp)
+          .withPorts(
+            Vector(load -> Some(false), clk -> Some(true), clear -> Some(false)) ++ ps.map(_ -> Some(false)): _*
+          )
+          .onStart { _ => expectedOut = 0 }
+          .onNegEdge(clk) { state =>
+            expectedOut = (expectedOut + 1) % (1 << n)
+          }
+          .onAction { (state, _, _, _) =>
+            if (state.get(load) == Some(true)) {
+              expectedOut = ps.map(state.get).sequence.get.toInt
+            }
+            if (state.get(clear) == Some(false)) {
+              expectedOut = 0
+            }
+          }
+          .check { state =>
+            outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
+          }
+          .run()
+      }
+    }
+  }
+
   "A ring counter" should {
 
     "behave as a ring counter" in {
@@ -420,7 +455,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
   "A RAM" should {
 
-    "behave as a random access memory" in {
+    "behave as a read-write random access memory" in {
       forAll(Gen.choose(1, 4), Gen.choose(1, 6)) { (inN, addrN) =>
         val ins = newBus(inN)
         val addr = newBus(addrN)
@@ -451,6 +486,29 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
             )
           }
           .run()
+      }
+    }
+  }
+
+  "A ROM" should {
+
+    "behave as a read-only memory" in {
+
+      forAll(Gen.choose(1, 6)) { addrN =>
+        forAll(Gen.listOfN(1 << addrN, Gen.listOfN(4, Gen.oneOf(false, true)))) { data =>
+          val addr = newBus(addrN)
+          val (outs, comp) = buildComponent { rom(data, addr) }
+          outs must haveLength(data.head.length)
+
+          def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
+
+          SequentialScenario(comp)
+            .withPorts(addr.map(_ -> Some(false)): _*)
+            .check { state =>
+              outs.map(state.get) must beEqualTo(data(addrIdx(state)).map(Some.apply))
+            }
+            .run()
+        }
       }
     }
   }
