@@ -32,12 +32,49 @@ def sap1(sapIn: Input): Spec[Bus] = newSpec {
 }
 
 def controller(sapIn: Input, instr: Bus): Spec[ControlBus] = newSpec {
+  val nhlt = not(multi(and)(instr: _*))
+
   val (clr, _) = flipflop(sapIn.clr, not(sapIn.clr))
   val (step, _) = flipflop(sapIn.step, not(sapIn.step))
   val (manual, auto) = flipflop(not(sapIn.auto), sapIn.auto)
-  val clk = nand(nand(step, manual), nand(auto, clock(10000)))
+  val clk = nand(
+    nand(manual, and(nhlt, step)),
+    nand(auto, jkFlipFlop(nhlt, nhlt, clock(10000), clr)._1)
+  )
 
-  ControlBus(???, clk, clr)
+  def toBin(x: Int, n: Int): Seq[Boolean] = (0 until n).map(i => (x & (1 << i)) != 0)
+
+  val addrRomData = (0 to 15).map {
+    case 0 => toBin(3, 4) // LDA
+    case 1 => toBin(6, 4) // ADD
+    case 2 => toBin(9, 4) // SUB
+    case 14 => toBin(12, 4) // OUT
+    case _ => toBin(0, 4) // Not used
+  }
+
+  val controlRomData = Vector(
+    toBin(0x5e3, 12), // t1
+    toBin(0xbe3, 12), // t2
+    toBin(0x263, 12), // t3
+    toBin(0x1a3, 12), // t4 LDA
+    toBin(0x2c3, 12), // t5 LDA
+    toBin(0x3e3, 12), // t6 LDA
+    toBin(0x1a3, 12), // t4 ADD
+    toBin(0x2e1, 12), // t5 ADD
+    toBin(0x3c7, 12), // t6 ADD
+    toBin(0x1a3, 12), // t4 SUB
+    toBin(0x2e1, 12), // t5 SUB
+    toBin(0x3cf, 12), // t6 SUB
+    toBin(0x3f2, 12), // t4 OUT
+    toBin(0x3e3, 12), // t5 OUT
+    toBin(0x3e3, 12), // t6 OUT
+    toBin(0, 12) // Not used
+  )
+
+  val t = ringCounter(6, clk, clr)
+  val con = rom(controlRomData, presettableCounter(rom(addrRomData, instr), or(t(0), clr), clk, t(2)))
+
+  ControlBus(con, clk, clr)
 }
 
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
