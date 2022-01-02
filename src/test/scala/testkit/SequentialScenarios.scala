@@ -20,8 +20,18 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
       onActionFuncs: Seq[ActionFunc] = Vector(),
       checkFunc: SimState => Result = _ => ok
   ) {
-    def withPorts(ports: (Port, Option[Boolean])*) = copy(ports = ports)
-    def withTestCases(testCases: Seq[(Port, Boolean)]*) = copy(testCases = testCases)
+    
+    def withPorts(ports: Port | Vector[Port] | (Port, Boolean) | (Vector[Port], Boolean)*) = {
+      val newPorts: Seq[(Port, Option[Boolean])] = ports.flatMap {
+        case p: Port => Vector(p -> None)
+        case bus: Vector[Port] @unchecked => bus.map(_ -> None)
+        case (p: Port, v: Boolean) => Vector(p -> Some(v))
+        case (bus: Vector[Port] @unchecked, v: Boolean) => bus.map(_ -> Some(v))
+      }
+      copy(ports = this.ports ++ newPorts)
+    }
+
+    def withTestCases(testCases: Seq[(Port, Boolean)]*) = copy(testCases = this.testCases ++ testCases)
 
     def onStart(f: SimState => Unit) = copy(onStartFunc = f)
     def beforeAction(f: ActionFunc) = copy(beforeActionFuncs = beforeActionFuncs :+ f)

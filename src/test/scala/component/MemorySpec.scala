@@ -87,7 +87,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       var expectedQ = Option.empty[Boolean]
 
       SequentialScenario(comp)
-        .withPorts(set -> None, reset -> None, clock -> Some(true))
+        .withPorts(set, reset, clock -> true)
         .onStart { _ => expectedQ = None }
         .beforeAction {
           // ensure `set` and `reset` are not High at the same time
@@ -156,7 +156,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       var expectedQ = Option.empty[Boolean]
 
       SequentialScenario(comp)
-        .withPorts(d -> None, clock -> Some(true))
+        .withPorts(d, clock -> true)
         .onStart { _ => expectedQ = None }
         .onPosEdge(clock) { state =>
           expectedQ = state.get(d).orElse(expectedQ)
@@ -215,7 +215,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       var expectedQ = Option.empty[Boolean]
 
       SequentialScenario(comp)
-        .withPorts(j -> Some(false), k -> Some(false), clk -> Some(true), clear -> Some(false))
+        .withPorts(j -> false, k -> false, clk -> true, clear -> false)
         .onStart { _ => expectedQ = Some(false) }
         .onPosEdge(clk) { state =>
           expectedQ = (state.get(j), state.get(k)) match {
@@ -307,11 +307,10 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         val load, clk, clear = newPort()
         val (outs, comp) = buildComponent { register(xs, load, clk, clear) }
 
-        val inits = List(load -> Some(false), clk -> Some(true), clear -> Some(false)) ++ xs.map(_ -> None)
         var expectedOuts = Vector.fill(n)(Option.empty[Boolean])
 
         SequentialScenario(comp)
-          .withPorts(inits: _*)
+          .withPorts(load -> false, clk -> true, clear -> false, xs)
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { state =>
             if (state.get(load) == Some(true)) {
@@ -369,7 +368,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         var expectedOut = 0
 
         SequentialScenario(comp)
-          .withPorts(count -> Some(false), clk -> Some(true), clear -> Some(false))
+          .withPorts(count -> false, clk -> true, clear -> false)
           .onStart { _ => expectedOut = 0 }
           .onNegEdge(clk) { state =>
             if (state.get(count) == Some(true)) {
@@ -401,9 +400,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         var expectedOut = 0
 
         SequentialScenario(comp)
-          .withPorts(
-            Vector(load -> Some(false), clk -> Some(true), clear -> Some(false)) ++ ps.map(_ -> Some(false)): _*
-          )
+          .withPorts(load -> false, clk -> true, clear -> false, ps -> false)
           .onStart { _ => expectedOut = 0 }
           .onNegEdge(clk) { state =>
             expectedOut = (expectedOut + 1) % (1 << n)
@@ -435,7 +432,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         var expectedIdx = 0
 
         SequentialScenario(comp)
-          .withPorts(clk -> Some(true), clear -> Some(false))
+          .withPorts(clk -> true, clear -> false)
           .onStart { _ => expectedIdx = 0 }
           .onNegEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
           .onAction { (state, _, _, _) =>
@@ -468,11 +465,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
 
         SequentialScenario(comp)
-          .withPorts(
-            List(we -> Some(false), ce -> Some(false)) ++
-              ins.map(_ -> Some(false)) ++
-              addr.map(_ -> Some(false)): _*
-          )
+          .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
           .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
           .onAction { (state, _, _, _) =>
             if (state.get(we) == Some(true)) {
@@ -503,7 +496,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
 
           SequentialScenario(comp)
-            .withPorts(addr.map(_ -> Some(false)): _*)
+            .withPorts(addr -> false)
             .check { state =>
               outs.map(state.get) must beEqualTo(data(addrIdx(state)).map(Some.apply))
             }

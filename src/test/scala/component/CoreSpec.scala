@@ -78,7 +78,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       var expectedQ = Option.empty[Boolean]
 
       SequentialScenario(comp)
-        .withPorts(set -> None, reset -> None)
+        .withPorts(set, reset)
         .onStart { _ => expectedQ = None }
         .beforeAction {
           // ensure `set` and `reset` are not High at the same time
@@ -149,7 +149,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       val (out, comp) = buildComponent { switch(in, enable) }
 
       SequentialScenario(comp)
-        .withPorts(in -> None, enable -> Some(false))
+        .withPorts(in, enable -> false)
         .check { state =>
           state.get(out) must beEqualTo(
             if (state.get(enable) == Some(true)) state.get(in) else None
