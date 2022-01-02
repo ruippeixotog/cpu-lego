@@ -35,7 +35,7 @@ object Sim {
     root match {
       case comp: BaseComponent => Circuit(List(comp), extraWires)
       case comp: CompositeComponent =>
-        comp.components.map(build(_)).fold(Circuit(Nil, extraWires ++ comp.wires)) { (c1, c2) =>
+        comp.components.values.map(build(_)).fold(Circuit(Nil, extraWires ++ comp.wires)) { (c1, c2) =>
           Circuit(c1.components ++ c2.components, c1.wires ++ c2.wires)
         }
     }

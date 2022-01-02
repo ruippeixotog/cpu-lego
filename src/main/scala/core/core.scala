@@ -30,6 +30,7 @@ class Switch extends BaseComponent {
 }
 
 trait CompositeComponent extends Component {
-  def components: List[Component]
+  def components: Map[String, Component]
+  def namedPorts: Map[String, Port | Vector[Port]]
   def wires: List[(Port, Port)]
 }

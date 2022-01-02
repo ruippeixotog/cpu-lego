@@ -7,7 +7,8 @@ object BuilderAPI {
   trait BuilderEnv {
     def componentName: Option[String]
 
-    def add(c: Component): Unit
+    def add(name: String, comp: Component): Unit
+    def register(name: String, port: Port | Vector[Port]): Unit
     def wire(port1: Port, port2: Port): Unit
   }
 
@@ -41,13 +42,22 @@ object BuilderAPI {
     buildComponent(None, spec)
 
   def buildComponent[A](name: Option[String], spec: Spec[A]): (A, Component) = {
-    var components0 = List.empty[Component]
+    var components0 = Map.empty[String, Component]
+    var namedPorts0 = Map.empty[String, Port | Vector[Port]]
     var wires0 = List.empty[(Port, Port)]
+
+    def candidateNames(name: String): Iterator[String] =
+      Iterator(name) ++ Iterator.from(1).map(name + "$" + _)
 
     val env = new BuilderEnv {
       def componentName = name
 
-      def add(c: Component) = components0 = c :: components0
+      def add(name: String, comp: Component) = {
+        candidateNames(name).find(!components0.contains(_)).foreach { components0 += (_, comp) }
+      }
+
+      def register(name: String, port: Port | Vector[Port]) = namedPorts0 += (name, port)
+
       def wire(port1: Port, port2: Port) = wires0 = (port1, port2) :: wires0
     }
 
@@ -55,6 +65,7 @@ object BuilderAPI {
       spec(using env),
       new CompositeComponent {
         val components = components0
+        val namedPorts = namedPorts0
         val wires = wires0
 
         override def toString = name.getOrElse(super.toString)

@@ -12,10 +12,10 @@ object BuilderAPIMacros {
   }
 
   def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
-    '{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) }
+    registerPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
 
   def newPort()(using Quotes): Expr[Port] =
-    newPort(None)
+    registerPort(newPort(None))
 
   def newPort(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
     import qctx.reflect._
@@ -59,10 +59,31 @@ object BuilderAPIMacros {
         '{
           val fullCompName = $env.componentName.fold("")(_ + ".") + $compName
           val (res, comp) = buildComponent(Some(fullCompName), $spec)
-          $env.add(comp)
+          $env.add($compName, comp)
           // type cast needed because `buildComponent` is getting incorrectly recognized
           res.asInstanceOf[A]
         }
+    }
+  }
+
+  // ---------
+
+  def registerPort[A <: Port | Bus: Type](portExpr: Expr[A])(using qctx: Quotes): Expr[A] = {
+    import qctx.reflect._
+
+    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
+    val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
+    val portName = Expr(macroOwner.name)
+
+    Expr.summon[BuilderEnv] match {
+      case Some(env) =>
+        '{
+          val p = $portExpr
+          $env.register($portName, p)
+          p
+        }
+      case _ =>
+        portExpr
     }
   }
 }
