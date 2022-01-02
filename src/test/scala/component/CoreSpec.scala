@@ -7,7 +7,7 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import simulator.{Circuit, PortChange, Sim, SimState}
+import simulator.{Circuit, PortChange, Sim, SimSetup, SimState}
 import testkit._
 
 class CoreSpec extends BaseSpec with SequentialScenarios {
@@ -128,11 +128,11 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
     "output High when the input changes from Low to High" in {
       val (out, comp) = buildComponent { posEdge(clock(50)) }
       // expected delay from clock out to posEdge out
-      val delay = Sim.WireDelay + Sim.GateDelay
+      val delay = Sim.WireDelay + SimSetup.GateDelay
 
       foreachTick(comp, 250) { (tick, state) =>
         // Positive edge triggering for clock(50) occurs at t=0,100,200...
-        state.get(out) must beSome((tick - delay + 100) % 100 < Sim.PosEdgeDelay)
+        state.get(out) must beSome((tick - delay + 100) % 100 < SimSetup.PosEdgeDelay)
       }
     }
   }
