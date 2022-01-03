@@ -96,13 +96,11 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
           case (state, _, _, _) => state
         }
-        .onAction { (state, _, _, _) =>
-          if (state.get(clock) == Some(true)) {
-            expectedQ = (state.get(set), state.get(reset)) match {
-              case (Some(true), _) => Some(true)
-              case (_, Some(true)) => Some(false)
-              case _ => expectedQ
-            }
+        .whenHigh(clock) { state =>
+          expectedQ = (state.get(set), state.get(reset)) match {
+            case (Some(true), _) => Some(true)
+            case (_, Some(true)) => Some(false)
+            case _ => expectedQ
           }
         }
         .check { state =>
@@ -227,11 +225,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
             case _ => expectedQ
           }
         }
-        .onAction { (state, _, _, _) =>
-          if (state.get(clear) == Some(false)) {
-            expectedQ = Some(false)
-          }
-        }
+        .whenLow(clear) { _ => expectedQ = Some(false) }
         .check { state =>
           state.get(q) must beEqualTo(expectedQ)
           state.get(nq) must beEqualTo(expectedQ.map(!_))
@@ -321,10 +315,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
               }
             }
           }
-          .onAction { (state, _, _, _) =>
-            if (state.get(clear) == Some(false)) {
-              expectedOuts = Vector.fill(n)(Some(false))
-            }
+          .whenLow(clear) { _ =>
+            expectedOuts = Vector.fill(n)(Some(false))
           }
           .check { state =>
             outs.map(state.get) must beEqualTo(expectedOuts)
@@ -377,11 +369,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
               expectedOut = (expectedOut + 1) % (1 << n)
             }
           }
-          .onAction { (state, _, _, _) =>
-            if (state.get(clear) == Some(false)) {
-              expectedOut = 0
-            }
-          }
+          .whenLow(clear) { _ => expectedOut = 0 }
           .check { state =>
             outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
           }
@@ -407,14 +395,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .onNegEdge(clk) { state =>
             expectedOut = (expectedOut + 1) % (1 << n)
           }
-          .onAction { (state, _, _, _) =>
-            if (state.get(load) == Some(true)) {
-              expectedOut = ps.map(state.get).sequence.get.toInt
-            }
-            if (state.get(clear) == Some(false)) {
-              expectedOut = 0
-            }
-          }
+          .whenHigh(load) { state => expectedOut = ps.map(state.get).sequence.get.toInt }
+          .whenLow(clear) { _ => expectedOut = 0 }
           .check { state =>
             outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
           }
@@ -437,11 +419,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .withPorts(clk -> true, clear -> false)
           .onStart { _ => expectedIdx = 0 }
           .onNegEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
-          .onAction { (state, _, _, _) =>
-            if (state.get(clear) == Some(false)) {
-              expectedIdx = 0
-            }
-          }
+          .whenLow(clear) { _ => expectedIdx = 0 }
           .check { state =>
             foreach(outs.zipWithIndex) { case (out, idx) =>
               state.get(out) must beSome(idx == expectedIdx)
@@ -469,11 +447,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
           .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
-          .onAction { (state, _, _, _) =>
-            if (state.get(we) == Some(true)) {
-              mem(addrIdx(state)) = ins.map(state.get)
-            }
-          }
+          .whenHigh(we) { state => mem(addrIdx(state)) = ins.map(state.get) }
           .check { state =>
             outs.map(state.get) must beEqualTo(
               if (state.get(ce) == Some(true)) mem(addrIdx(state))

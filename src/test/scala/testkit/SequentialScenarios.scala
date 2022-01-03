@@ -46,6 +46,14 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
       case (state, `port`, false, oldVal) if oldVal != Some(false) => f(state)
       case _ => // do nothing
     }
+    def whenHigh(port: Port)(f: SimState => Unit) = onAction {
+      case (state, _, _, _) if state.get(port) == Some(true) => f(state)
+      case _ => // do nothing
+    }
+    def whenLow(port: Port)(f: SimState => Unit) = onAction {
+      case (state, _, _, _) if state.get(port) == Some(false) => f(state)
+      case _ => // do nothing
+    }
 
     def check(f: SimState => Result) = copy(checkFunc = f)
 
