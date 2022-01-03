@@ -9,6 +9,7 @@ import org.specs2.mutable.Specification
 import simulator.{PortChange, Sim, SimState}
 
 trait SequentialScenarios { this: Specification with ScalaCheck =>
+  type BeforeActionFunc = (SimState, Port, Boolean, Option[Boolean]) => SimState
   type ActionFunc = (SimState, Port, Boolean, Option[Boolean]) => Unit
 
   case class SequentialScenario(
@@ -16,7 +17,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
       ports: Seq[(Port, Option[Boolean])] = Nil,
       testCases: Seq[Seq[(Port, Boolean)]] = Nil,
       onStartFunc: SimState => Unit = _ => {},
-      beforeActionFuncs: Seq[ActionFunc] = Vector(),
+      beforeActionFuncs: Seq[BeforeActionFunc] = Vector(),
       onActionFuncs: Seq[ActionFunc] = Vector(),
       checkFunc: SimState => Result = _ => ok
   ) {
@@ -34,7 +35,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
     def withTestCases(testCases: Seq[(Port, Boolean)]*) = copy(testCases = this.testCases ++ testCases)
 
     def onStart(f: SimState => Unit) = copy(onStartFunc = f)
-    def beforeAction(f: ActionFunc) = copy(beforeActionFuncs = beforeActionFuncs :+ f)
+    def beforeAction(f: BeforeActionFunc) = copy(beforeActionFuncs = beforeActionFuncs :+ f)
     def onAction(f: ActionFunc) = copy(onActionFuncs = onActionFuncs :+ f)
 
     def onPosEdge(port: Port)(f: SimState => Unit) = onAction {
@@ -59,15 +60,15 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
 
     def runTestCase(actions: Seq[(Port, Boolean)]): Result = {
       var state = Sim.runComponent(comp)
-      ports.foreach { case (port, newVal) => state.schedule(0, PortChange(port, newVal)) }
+      ports.foreach { case (port, newVal) => state = state.schedule(0, PortChange(port, newVal)) }
       state = Sim.run(state)
       onStartFunc(state)
 
       foreach(actions) { case (port, newVal) =>
         val oldVal = state.get(port)
-        beforeActionFuncs.foreach(_(state, port, newVal, oldVal))
+        beforeActionFuncs.foreach { f => state = f(state, port, newVal, oldVal) }
 
-        state.schedule(0, PortChange(port, Some(newVal)))
+        state = state.schedule(0, PortChange(port, Some(newVal)))
         state = Sim.run(state)
 
         onActionFuncs.foreach(_(state, port, newVal, oldVal))

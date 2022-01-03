@@ -1,7 +1,6 @@
 package simulator
 
 import scala.collection.immutable.TreeMap
-import scala.collection.mutable.PriorityQueue
 
 import core._
 import util.UnionFind
@@ -22,54 +21,45 @@ object Sim {
     SimSetup.setup(c)
 
   def run(st: SimState, maxTicks: Option[Int] = None): SimState = {
-    if (st.debug) println("t=0: start simulation")
+    if (st.events.isEmpty) return st
 
-    while (!st.events.isEmpty) {
-      val (t1, evs) = st.events.head
-      if (maxTicks.exists(t1 > _)) return st
+    val (t1, evs) = st.events.head
+    if (maxTicks.exists(t1 > _)) return st
 
-      st.events = st.events.tail
-      st.t = t1
+    val sortedEvs = evs.sortBy {
+      case PortGroupDrive(_) => 1
+      case PortChange(_, _) => 2
+    }
 
-      val sortedEvs = evs.sortBy {
-        case PortGroupDrive(_) => 1
-        case PortChange(_, _) => 2
-      }
+    val next = sortedEvs.foldLeft(st.copy(t = t1, events = st.events.tail)) { case (st, ev) =>
+      ev match {
+        case PortChange(port, newValue) =>
+          if (newValue == st.portValues(port)) st
+          else st.set(port, newValue).schedule(WireDelay, PortGroupDrive(st.c.groupOf(port)))
 
-      for (ev <- sortedEvs) {
-        if (st.debug) println(s"t=$t1: $ev")
-
-        ev match {
-          case PortChange(port, newValue) =>
-            if (newValue != st.portValues(port)) {
-              st.set(port, newValue)
-              st.schedule(WireDelay, PortGroupDrive(st.c.groupOf(port)))
-            }
-
-          case PortGroupDrive(group) =>
-            val groupPorts = st.c.portsOf(group).toList
-            val newValue = groupPorts.map(st.portValues).flatten match {
-              case Nil => None
-              case v :: Nil => Some(v)
-              case vs =>
-                vs.distinct match {
-                  case v :: Nil =>
-                    println("WARNING")
-                    Some(v)
-                  case _ =>
-                    throw new Exception("PUM")
-                }
-            }
-            if (newValue != st.groupValues(group)) {
-              st.groupValues += ((group, newValue))
-              groupPorts.foreach { port =>
-                st.portObservers(port).foreach(_(newValue))
+        case PortGroupDrive(group) =>
+          val groupPorts = st.c.portsOf(group).toList
+          val newValue = groupPorts.map(st.portValues).flatten match {
+            case Nil => None
+            case v :: Nil => Some(v)
+            case vs =>
+              vs.distinct match {
+                case v :: Nil =>
+                  println("WARNING")
+                  Some(v)
+                case _ =>
+                  throw new Exception("PUM")
               }
+          }
+          if (newValue == st.groupValues(group)) st
+          else {
+            groupPorts.foldLeft(st.copy(groupValues = st.groupValues + ((group, newValue)))) { case (st, p) =>
+              st.portObservers(p).foldLeft(st) { case (st2, f) => f(st2) }
             }
-        }
+          }
       }
     }
-    st
+    run(next, maxTicks)
   }
 }
 
@@ -77,27 +67,26 @@ trait SimEvent
 case class PortChange(port: Port, value: Option[Boolean]) extends SimEvent
 case class PortGroupDrive(group: PortGroup) extends SimEvent
 
-class SimState(val c: Circuit) {
-  var t: Long = 0
-  // val events: PriorityQueue[(Long, SimEvent)] = PriorityQueue.empty(Ordering.by(-_._1))
-  var events: TreeMap[Long, Vector[SimEvent]] = TreeMap()
-  var portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None)
-  var portObservers: Map[Port, List[Option[Boolean] => Unit]] = Map().withDefaultValue(Nil)
-  var groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
-  var debug: Boolean = false
+case class SimState(
+    c: Circuit,
+    t: Long = 0,
+    events: TreeMap[Long, Vector[SimEvent]] = TreeMap(),
+    portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
+    portObservers: Map[Port, List[SimState => SimState]] = Map().withDefaultValue(Nil),
+    groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
+) {
 
   def get(port: Port): Option[Boolean] = {
     portValues(port).orElse(groupValues(c.groupOf(port)))
   }
 
-  def set(port: Port, value: Option[Boolean]) = {
-    portValues += ((port, value))
-    portObservers(port).foreach(_(value))
+  def set(port: Port, value: Option[Boolean]): SimState = {
+    portObservers(port).foldLeft(copy(portValues = portValues + ((port, value)))) { case (st, f) => f(st) }
   }
 
-  def watch(port: Port, callback: Option[Boolean] => Unit): Unit =
-    portObservers += ((port, callback :: portObservers.getOrElse(port, Nil)))
+  def watch(port: Port, callback: SimState => SimState): SimState =
+    copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
 
-  def schedule(after: Long, ev: SimEvent) =
-    events += ((t + after, events.getOrElse(t + after, Vector()) :+ ev))
+  def schedule(after: Long, ev: SimEvent): SimState =
+    copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
 }

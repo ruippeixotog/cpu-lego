@@ -50,9 +50,10 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       val set, reset = newPort()
       val ((q, nq), comp) = buildComponent { flipflop(set, reset) }
 
-      def setInputs(s: Boolean, r: Boolean)(state: SimState): Unit = {
-        state.schedule(0, PortChange(set, Some(s)))
-        state.schedule(0, PortChange(reset, Some(r)))
+      def setInputs(s: Boolean, r: Boolean)(state: SimState) = {
+        state
+          .schedule(0, PortChange(set, Some(s)))
+          .schedule(0, PortChange(reset, Some(r)))
       }
 
       runPlan(
@@ -84,7 +85,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
           // ensure `set` and `reset` are not High at the same time
           case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
           case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
-          case _ => // do nothing
+          case (state, _, _, _) => state
         }
         .onAction { (state, _, _, _) =>
           expectedQ = (state.get(set), state.get(reset)) match {

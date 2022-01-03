@@ -60,8 +60,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val ((q, nq), comp) = buildComponent { latchClocked(set, reset, clock(100)) }
 
       def setInputs(s: Boolean, r: Boolean)(state: SimState) = {
-        state.schedule(0, PortChange(set, Some(s)))
-        state.schedule(0, PortChange(reset, Some(r)))
+        state
+          .schedule(0, PortChange(set, Some(s)))
+          .schedule(0, PortChange(reset, Some(r)))
       }
 
       runPlan(
@@ -93,7 +94,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           // ensure `set` and `reset` are not High at the same time
           case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
           case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
-          case _ => // do nothing
+          case (state, _, _, _) => state
         }
         .onAction { (state, _, _, _) =>
           if (state.get(clock) == Some(true)) {
@@ -186,8 +187,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         state.schedule(0, PortChange(clear, Some(clr)))
 
       def setInput(set: Boolean, reset: Boolean)(state: SimState) = {
-        state.schedule(0, PortChange(j, Some(set)))
-        state.schedule(0, PortChange(k, Some(reset)))
+        state
+          .schedule(0, PortChange(j, Some(set)))
+          .schedule(0, PortChange(k, Some(reset)))
       }
 
       runPlan(
@@ -277,8 +279,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val (outs, comp) = buildComponent { register(ins, load, clock(100)) }
 
       def setInputs(load0: Boolean, ins0: List[Boolean])(state: SimState) = {
-        state.schedule(0, PortChange(load, Some(load0)))
-        ins.zip(ins0).foreach { case (port, v) => state.schedule(0, PortChange(port, Some(v))) }
+        val st0 = state.schedule(0, PortChange(load, Some(load0)))
+        ins.zip(ins0).foldLeft(st0) { case (st, (port, v)) => st.schedule(0, PortChange(port, Some(v))) }
       }
 
       val val1 = List(true, false, false, true)
