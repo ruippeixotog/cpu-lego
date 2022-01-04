@@ -79,7 +79,7 @@ def controller(sapIn: Input, instr: Bus): Spec[ControlBus] = newSpec {
 
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
   val (bus0, bus1) = bus.splitAt(4)
-  register(bus0, load, clk) ~> bus0
+  buffered(enable)(register(bus0, load, clk)) ~> bus0
   register(bus1, load, clk, clr)
 }
 

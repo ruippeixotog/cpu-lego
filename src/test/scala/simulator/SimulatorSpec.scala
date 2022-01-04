@@ -69,5 +69,23 @@ class SimulatorSpec extends BaseSpec {
         state.get(out) must beSome(expected)
       }
     }
+
+    "handle well three-state buses" in {
+      val in1, load1, in2, load2, bus = newPort()
+      val (_, comp) = buildComponent {
+        switch(in1, load1) ~> bus
+        switch(in2, load2) ~> bus
+      }
+      runPlan(
+        comp,
+        100 -> { _.get(bus) must beNone },
+        200 -> { _.schedule(0, PortChange(in1, Some(false))).schedule(0, PortChange(in2, Some(true))) },
+        300 -> { _.get(bus) must beNone },
+        400 -> { _.schedule(0, PortChange(load1, Some(true))) },
+        500 -> { _.get(bus) must beSome(false) },
+        600 -> { _.schedule(0, PortChange(load1, Some(false))).schedule(0, PortChange(load2, Some(true))) },
+        700 -> { _.get(bus) must beSome(true) }
+      )
+    }
   }
 }
