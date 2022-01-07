@@ -4,34 +4,44 @@ import component.BuilderAPI._
 import component._
 import core._
 
+import ControlBus._
+import ControlBus.Bit._
+
 case class Input(prog: Port, write: Port, addr: Bus, data: Bus, clr: Port, step: Port, auto: Port)
 
-case class ControlBus(con: Bus, clk: Port, clr: Port) {
-  val Vector(cp, ep, lm, ce, li, ei, la, ea, su, eu, lb, lo) = con
+case class ControlBus(bus: Bus) {
+  def apply(b: ControlBus.Bit) = bus(b.ordinal)
+}
+
+object ControlBus {
+  enum Bit { case Lo, Lb, Eu, Su, Ea, La, Ei, Li, Ce, Lm, Ep, Cp }
+
+  def fromBits(bits: Bit*): Vector[Boolean] =
+    bits.foldLeft(Vector.fill(12)(false)) { (vec, b) => vec.updated(b.ordinal, true) }
 }
 
 def sap1(sapIn: Input): Spec[Bus] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
-  val ctrl = controller(sapIn, instr)
-  import ctrl._
+  val (clk, clr) = controller(sapIn, instr)
+  val con = sequencer(instr, clk, clr)
 
-  instrRegister(bus, li, clk, clr, ei) ~> instr
+  instrRegister(bus, con(Li), clk, clr, con(Ei)) ~> instr
 
-  progCounter(bus, cp, not(clk), not(clr), ep)
+  progCounter(bus, con(Cp), not(clk), not(clr), con(Ep))
 
-  val mOut = register(bus.take(4), lm, clk)
-  ram(bus, mOut, ce, sapIn)
+  val mOut = register(bus.take(4), con(Lm), clk)
+  ram(bus, mOut, con(Ce), sapIn)
 
-  val aOut = accumulator(bus, clk, la, ea)
-  val bOut = register(bus, lb, clk)
-  alu(bus, aOut, bOut, su, eu)
+  val aOut = accumulator(bus, clk, con(La), con(Ea))
+  val bOut = register(bus, con(Lb), clk)
+  alu(bus, aOut, bOut, con(Su), con(Eu))
 
-  register(bus, lo, clk)
+  register(bus, con(Lo), clk)
 }
 
-def controller(sapIn: Input, instr: Bus): Spec[ControlBus] = newSpec {
+def controller(sapIn: Input, instr: Bus): Spec[(Port, Port)] = newSpec {
   val nhlt = not(multi(and)(instr: _*))
 
   val (clr, _) = flipflop(sapIn.clr, not(sapIn.clr))
@@ -41,40 +51,36 @@ def controller(sapIn: Input, instr: Bus): Spec[ControlBus] = newSpec {
     nand(manual, and(nhlt, step)),
     nand(auto, jkFlipFlop(nhlt, nhlt, clock(10000), clr)._1)
   )
+  (clk, clr)
+}
 
-  def toBin(x: Int, n: Int): Seq[Boolean] = (0 until n).map(i => (x & (1 << i)) != 0)
+def sequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
+  val Vector(t1, t2, t3, t4, t5, t6) = ringCounter(6, clk, clr)
+  val Vector(lda, add, sub, _, _, _, _, _, _, _, _, _, _, _, out, _) = decoder(instr, High)
 
-  val addrRomData = (0 to 15).map {
-    case 0 => toBin(3, 4) // LDA
-    case 1 => toBin(6, 4) // ADD
-    case 2 => toBin(9, 4) // SUB
-    case 14 => toBin(12, 4) // OUT
-    case _ => toBin(0, 4) // Not used
-  }
-
-  val controlRomData = Vector(
-    toBin(0x5e3, 12), // t1
-    toBin(0xbe3, 12), // t2
-    toBin(0x263, 12), // t3
-    toBin(0x1a3, 12), // t4 LDA
-    toBin(0x2c3, 12), // t5 LDA
-    toBin(0x3e3, 12), // t6 LDA
-    toBin(0x1a3, 12), // t4 ADD
-    toBin(0x2e1, 12), // t5 ADD
-    toBin(0x3c7, 12), // t6 ADD
-    toBin(0x1a3, 12), // t4 SUB
-    toBin(0x2e1, 12), // t5 SUB
-    toBin(0x3cf, 12), // t6 SUB
-    toBin(0x3f2, 12), // t4 OUT
-    toBin(0x3e3, 12), // t5 OUT
-    toBin(0x3e3, 12), // t6 OUT
-    toBin(0, 12) // Not used
+  ControlBus(
+    Vector(
+      multi(or)(and(t4, out)),
+      multi(or)(and(t5, add), and(t5, sub)),
+      multi(or)(and(t6, add), and(t6, sub)),
+      multi(or)(and(t6, sub)),
+      multi(or)(and(t4, out)),
+      multi(or)(and(t5, lda), and(t6, add), and(t6, sub)),
+      multi(or)(and(t4, lda), and(t4, add), and(t4, sub)),
+      multi(or)(t3),
+      multi(or)(t3, and(t5, lda), and(t5, add), and(t5, sub)),
+      multi(or)(t1, and(t4, lda), and(t4, add), and(t4, sub)),
+      multi(or)(t1),
+      multi(or)(t2)
+    )
   )
+}
 
+def microprogSequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
   val t = ringCounter(6, clk, clr)
-  val con = rom(controlRomData, presettableCounter(rom(addrRomData, instr), or(t(0), clr), clk, t(2)))
-
-  ControlBus(con, clk, clr)
+  val addr1 = addrRom(instr)
+  val addr2 = presettableCounter(addr1, t(2), clk, and(clr, not(posEdge(t(0)))))
+  ControlBus(controlRom(addr2))
 }
 
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
@@ -104,4 +110,43 @@ def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newS
 
 def alu(bus: Bus, ins1: Bus, ins2: Bus, sub: Port, enable: Port): Spec[Unit] = newSpec {
   buffered(enable)(addSub(ins1, ins2, sub)) ~> bus
+}
+
+def addrRom(addr: Bus): Spec[Bus] = newSpec {
+  def toBin(x: Int, n: Int): Seq[Boolean] = (0 until n).map(i => (x & (1 << i)) != 0)
+
+  // format: off
+  val data = (0 to 15).map {
+    case 0 => toBin(3, 4)     // LDA
+    case 1 => toBin(6, 4)     // ADD
+    case 2 => toBin(9, 4)     // SUB
+    case 14 => toBin(12, 4)   // OUT
+    case _ => toBin(0, 4)     // Not used
+  }
+  // format: on
+  rom(data, addr)
+}
+
+def controlRom(addr: Bus): Spec[Bus] = newSpec {
+  // format: off
+  val data = Vector(
+    ControlBus.fromBits(Ep, Lm),      // t1
+    ControlBus.fromBits(Cp),          // t2
+    ControlBus.fromBits(Ce, Li),      // t3
+    ControlBus.fromBits(Lm, Ei),      // t4 LDA
+    ControlBus.fromBits(Ce, La),      // t5 LDA
+    ControlBus.fromBits(),            // t6 LDA
+    ControlBus.fromBits(Lm, Ei),      // t4 ADD
+    ControlBus.fromBits(Ce, Lb),      // t5 ADD
+    ControlBus.fromBits(La, Eu),      // t6 ADD
+    ControlBus.fromBits(Lm, Ei),      // t4 SUB
+    ControlBus.fromBits(Ce, Lb),      // t5 SUB
+    ControlBus.fromBits(La, Su, Eu),  // t6 SUB
+    ControlBus.fromBits(Ea, Lo),      // t4 OUT
+    ControlBus.fromBits(),            // t5 OUT
+    ControlBus.fromBits(),            // t6 OUT
+    ControlBus.fromBits()             // Not used
+  )
+  // format: on
+  rom(data, addr)
 }

@@ -3,6 +3,10 @@ package component
 import component.BuilderAPI._
 import core._
 
+def negEdge(in: Port): Spec[Port] = newSpec {
+  posEdge(not(in))
+}
+
 /** An `ins.length` to 2^`ins.length` decoder.
   */
 def decoder(ins: Bus, enable: Port): Spec[Bus] = newSpec {

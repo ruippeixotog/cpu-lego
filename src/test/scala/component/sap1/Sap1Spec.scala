@@ -1,12 +1,47 @@
 package component.sap1
 
-import component._
 import component.BuilderAPI._
+import component._
+import component.sap1.ControlBus.Bit._
 import core._
-import testkit._
+import org.specs2.specification.core.Fragment
 import simulator.PortChange
+import testkit._
 
 class Sap1Spec extends BaseSpec with SequentialScenarios {
+
+  "A sequencer" should {
+
+    val steps = List(
+      "LDA" -> (0, List(Lm, Ei), List(Ce, La), Nil),
+      "ADD" -> (1, List(Lm, Ei), List(Ce, Lb), List(La, Eu)),
+      "SUB" -> (2, List(Lm, Ei), List(Ce, Lb), List(La, Su, Eu)),
+      "OUT" -> (14, List(Ea, Lo), Nil, Nil)
+    )
+
+    Fragment.foreach(steps) { case (op, (opcode, c4, c5, c6)) =>
+      s"emit the correct words on a $op instruction" in {
+        val instr = (0 until 4).map { i => if ((opcode & (1 << i)) == 0) Low else High }.toVector
+        val clk, clr = newPort()
+        val (con, comp) = buildComponent { sequencer(instr, clk, clr) }
+
+        var t = 0
+        val expectedCon = Vector(
+          ControlBus.fromBits(Ep, Lm),
+          ControlBus.fromBits(Cp),
+          ControlBus.fromBits(Ce, Li)
+        ) ++ Vector(c4, c5, c6).map(ControlBus.fromBits)
+
+        SequentialScenario(comp)
+          .withPorts(clk -> true, clr -> false)
+          .onStart { _ => t = 0 }
+          .onNegEdge(clk) { _ => t = (t + 1) % 6 }
+          .whenLow(clr) { _ => t = 0 }
+          .check { state => con.bus.map(state.get).sequence must beSome(expectedCon(t)) }
+          .run()
+      }
+    }
+  }
 
   "An instruction register" should {
 
