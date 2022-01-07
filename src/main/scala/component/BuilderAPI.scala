@@ -42,9 +42,9 @@ object BuilderAPI {
     buildComponent(None, spec)
 
   def buildComponent[A](name: Option[String], spec: Spec[A]): (A, Component) = {
-    var components0 = Map.empty[String, Component]
-    var namedPorts0 = Map.empty[String, Port | Vector[Port]]
-    var wires0 = List.empty[(Port, Port)]
+    var components = Map.empty[String, Component]
+    var wires = List.empty[(Port, Port)]
+    var namedPorts = Map.empty[String, Port | Vector[Port]]
 
     def candidateNames(name: String): Iterator[String] =
       Iterator(name) ++ Iterator.from(1).map(name + "$" + _)
@@ -53,23 +53,17 @@ object BuilderAPI {
       def componentName = name
 
       def add(name: String, comp: Component) = {
-        candidateNames(name).find(!components0.contains(_)).foreach { components0 += (_, comp) }
+        candidateNames(name).find(!components.contains(_)).foreach { components += (_, comp) }
       }
 
-      def register(name: String, port: Port | Vector[Port]) = namedPorts0 += (name, port)
+      def register(name: String, port: Port | Vector[Port]) = namedPorts += (name, port)
 
-      def wire(port1: Port, port2: Port) = wires0 = (port1, port2) :: wires0
+      def wire(port1: Port, port2: Port) = wires = (port1, port2) :: wires
     }
 
     return (
       spec(using env),
-      new CompositeComponent {
-        val components = components0
-        val namedPorts = namedPorts0
-        val wires = wires0
-
-        override def toString = name.getOrElse(super.toString)
-      }
+      CompositeComponent(name.getOrElse(super.toString), components, wires, namedPorts)
     )
   }
 }

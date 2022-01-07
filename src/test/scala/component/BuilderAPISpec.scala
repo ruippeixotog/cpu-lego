@@ -50,8 +50,17 @@ class BuilderAPISpec extends BaseSpec {
 
       getPortsFlat(comp).keySet must beEqualTo(
         Set(
+          ".nand.in1",
+          ".nand.in2",
+          ".nand.out",
+          ".nand$1.in1",
+          ".nand$1.in2",
+          ".nand$1.out",
           ".myOperator.myPort",
-          ".myOperator.myBus"
+          ".myOperator.myBus",
+          ".myOperator.not.nand.in1",
+          ".myOperator.not.nand.in2",
+          ".myOperator.not.nand.out"
         )
       )
     }

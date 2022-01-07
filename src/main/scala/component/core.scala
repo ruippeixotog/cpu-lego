@@ -3,44 +3,39 @@ package component
 import component.BuilderAPI._
 import core._
 
-def nand(in1: Port, in2: Port): Spec[Port] = newSpec {
-  val env = summon[BuilderEnv]
-  val nand = new NAND
-  env.add("impl", nand)
-  env.wire(in1, nand.in1)
-  env.wire(in2, nand.in2)
-  nand.out
+def nand(_in1: Port, _in2: Port): Spec[Port] = newSpec {
+  val in1, in2, out = newPort()
+  summon[BuilderEnv].add("impl", NAND(in1, in2, out))
+  _in1 ~> in1
+  _in2 ~> in2
+  out
 }
 
-def flipflop(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
-  val env = summon[BuilderEnv]
-  val ff = new FlipFlop
-  env.add("impl", ff)
-  env.wire(set, ff.set)
-  env.wire(reset, ff.reset)
-  (ff.q, ff.nq)
+def flipflop(_set: Port, _reset: Port): Spec[(Port, Port)] = newSpec {
+  val set, reset, q, nq = newPort()
+  summon[BuilderEnv].add("impl", FlipFlop(set, reset, q, nq))
+  _set ~> set
+  _reset ~> reset
+  (q, nq)
 }
 
 def clock(freq: Int): Spec[Port] = newSpec {
-  val env = summon[BuilderEnv]
-  val clock = new Clock(freq)
-  env.add("impl", clock)
-  clock.out
+  val out = newPort()
+  summon[BuilderEnv].add("impl", Clock(freq, out))
+  out
 }
 
-def posEdge(in: Port): Spec[Port] = newSpec {
-  val env = summon[BuilderEnv]
-  val posEdge = new PosEdge
-  env.add("impl", posEdge)
-  env.wire(in, posEdge.in)
-  posEdge.out
+def posEdge(_in: Port): Spec[Port] = newSpec {
+  val in, out = newPort()
+  summon[BuilderEnv].add("impl", PosEdge(in, out))
+  _in ~> in
+  out
 }
 
-def switch(in: Port, enable: Port): Spec[Port] = newSpec {
-  val env = summon[BuilderEnv]
-  val switch = new Switch
-  env.add("impl", switch)
-  env.wire(in, switch.in)
-  env.wire(enable, switch.enable)
-  switch.out
+def switch(_in: Port, _enable: Port): Spec[Port] = newSpec {
+  val in, out, enable = newPort()
+  summon[BuilderEnv].add("impl", Switch(in, out, enable))
+  _in ~> in
+  _enable ~> enable
+  out
 }
