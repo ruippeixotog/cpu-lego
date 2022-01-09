@@ -12,10 +12,10 @@ object BuilderAPIMacros {
   }
 
   def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
-    registerPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
+    registerNewPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
 
   def newPort()(using Quotes): Expr[Port] =
-    registerPort(newPort(None))
+    registerNewPort(newPort(None))
 
   def newPort(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
     import qctx.reflect._
@@ -48,27 +48,59 @@ object BuilderAPIMacros {
 
     def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
     lazy val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
-
     val compName = Expr(macroOwner.name)
 
-    Expr.summon[BuilderEnv] match {
-      case None =>
-        report.error(s"could not find implicit for ${Type.show[BuilderEnv]}")
-        '{ ??? }
-      case Some(env) =>
-        '{
-          val fullCompName = $env.componentName.fold("")(_ + ".") + $compName
-          val (res, comp) = buildComponent(Some(fullCompName), $spec)
-          $env.add($compName, comp)
-          // type cast needed because `buildComponent` is getting incorrectly recognized
-          res.asInstanceOf[A]
+    def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
+      val exprs = macroOwner.paramSymss.flatten.map { sym =>
+        val ValDef(name, ttree, _) = sym.tree
+        ttree.tpe.asType match {
+          case '[t] => registerPorts(env, name, Ref(sym).asExprOf[t])
         }
+      }
+      Expr.block(exprs, '{})
+    }
+
+    val env = Expr.summon[BuilderEnv].getOrElse {
+      report.errorAndAbort(s"could not find implicit for ${Type.show[BuilderEnv]}")
+    }
+
+    '{
+      val (res, comp) = buildComponent(
+        Some($compName), {
+          val innerEnv = summon[BuilderEnv]
+          val innerRes = $spec
+          ${ registerArgs('innerEnv) }
+          ${ registerPorts('innerEnv, "out", 'innerRes) }
+          innerRes
+        }
+      )
+      $env.add($compName, comp)
+      res
     }
   }
 
   // ---------
 
-  def registerPort[A <: Port | Bus: Type](portExpr: Expr[A])(using qctx: Quotes): Expr[A] = {
+  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A])(using Quotes): Expr[Unit] = {
+    expr match {
+      case '{ $port: Port } =>
+        '{ $env.register(${ Expr(name) }, $port) }
+      case '{ $bus: Bus } =>
+        '{ $env.register(${ Expr(name) }, $bus) }
+      case '{ $p: (t, u) } =>
+        Expr.block(
+          List(
+            registerPorts(env, s"${name}1", '{ $p._1 }),
+            registerPorts(env, s"${name}2", '{ $p._2 })
+          ),
+          '{}
+        )
+      case _ =>
+        '{}
+    }
+  }
+
+  def registerNewPort[A <: Port | Bus: Type](portExpr: Expr[A])(using qctx: Quotes): Expr[A] = {
     import qctx.reflect._
 
     def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)

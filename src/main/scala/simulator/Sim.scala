@@ -1,5 +1,6 @@
 package simulator
 
+import scala.annotation.tailrec
 import scala.collection.immutable.TreeMap
 
 import core._
@@ -20,11 +21,17 @@ object Sim {
   inline def setup(c: Circuit): SimState =
     SimSetup.setup(c)
 
-  def run(st: SimState, maxTicks: Option[Int] = None): SimState = {
-    if (st.events.isEmpty) return st
+  @tailrec def run(st: SimState, maxTicks: Option[Int] = None): SimState =
+    step(st, maxTicks) match {
+      case None => st
+      case Some(next) => run(next, maxTicks)
+    }
+
+  def step(st: SimState, maxTicks: Option[Int] = None): Option[SimState] = {
+    if (st.events.isEmpty) return None
 
     val (t1, evs) = st.events.head
-    if (maxTicks.exists(t1 > _)) return st
+    if (maxTicks.exists(t1 > _)) return None
 
     val sortedEvs = evs.sortBy {
       case PortGroupDrive(_) => 1
@@ -32,6 +39,7 @@ object Sim {
     }
 
     val next = sortedEvs.foldLeft(st.copy(t = t1, events = st.events.tail)) { case (st, ev) =>
+      // println(s"t=$t1: $ev")
       ev match {
         case PortChange(port, newValue) =>
           if (newValue == st.portValues(port)) st
@@ -59,7 +67,7 @@ object Sim {
           }
       }
     }
-    run(next, maxTicks)
+    Some(next)
   }
 }
 
