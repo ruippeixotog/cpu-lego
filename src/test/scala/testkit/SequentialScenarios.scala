@@ -21,7 +21,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
       onActionFuncs: Seq[ActionFunc] = Vector(),
       checkFunc: SimState => Result = _ => ok
   ) {
-    
+
     def withPorts(ports: Port | Vector[Port] | (Port, Boolean) | (Vector[Port], Boolean)*) = {
       val newPorts: Seq[(Port, Option[Boolean])] = ports.flatMap {
         case p: Port => Vector(p -> None)
@@ -67,7 +67,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
     }
 
     def runTestCase(actions: Seq[(Port, Boolean)]): Result = {
-      var state = Sim.runComponent(comp)
+      var state = Sim.setupAndRun(comp)
       ports.foreach { case (port, newVal) => state = state.schedule(0, PortChange(port, newVal)) }
       state = Sim.run(state)
       onStartFunc(state)

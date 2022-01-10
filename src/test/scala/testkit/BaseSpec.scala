@@ -23,11 +23,11 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   def buildAndRun[A](spec: Spec[A]): (A, SimState) = {
     val (res, comp) = buildComponent(spec)
-    (res, Sim.runComponent(comp))
+    (res, Sim.setupAndRun(comp))
   }
 
   def runPlan(comp: Component, plan: (Int, SimState => Result | SimState)*): Result = {
-    var state = Sim.setup(Sim.build(comp))
+    var state = Sim.setup(comp)
     foreach(plan.toList.sortBy(_._1)) { case (tick, f) =>
       state = Sim.run(state, Some(tick))
       f(state) match {

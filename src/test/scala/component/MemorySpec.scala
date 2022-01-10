@@ -20,7 +20,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { latchClocked(new Port, new Port, clock(100)) }
-      val state = Sim.runComponent(comp, Some(1000))
+      val state = Sim.setupAndRun(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
@@ -115,14 +115,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { dLatch(new Port, clock(100)) }
-      val state = Sim.runComponent(comp, Some(1000))
+      val state = Sim.setupAndRun(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
 
     "be set to the input on positive edge trigger" in forAll { (in: LogicLevel) =>
       val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
-      val state = Sim.runComponent(comp, Some(250))
+      val state = Sim.setupAndRun(comp, Some(250))
       state.get(q) must beSome(in.toBool)
       state.get(nq) must beSome(!in.toBool)
     }
@@ -172,7 +172,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { jkFlipFlop(new Port, new Port, clock(100), High) }
-      val state = Sim.runComponent(comp, Some(1000))
+      val state = Sim.setupAndRun(comp, Some(1000))
       state.get(q) must beNone
       state.get(nq) must beNone
     }
@@ -239,7 +239,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
       val ins = newBus(n)
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val state = Sim.runComponent(comp, Some(1000))
+      val state = Sim.setupAndRun(comp, Some(1000))
       foreach(outs) { out => state.get(out) must beNone }
     }
 
@@ -250,13 +250,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "remain unset while load is Low" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val state = Sim.runComponent(comp, Some(1000))
+      val state = Sim.setupAndRun(comp, Some(1000))
       foreach(outs) { out => state.get(out) must beNone }
     }
 
     "be set to the input on clock positive edge when load is High" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
-      val state = Sim.runComponent(comp, Some(250))
+      val state = Sim.setupAndRun(comp, Some(250))
       outs.map(state.get).sequence must beSome.which { bools =>
         bools must beEqualTo(ins.map(_.toBool))
       }

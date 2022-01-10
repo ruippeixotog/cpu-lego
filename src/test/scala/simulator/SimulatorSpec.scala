@@ -55,7 +55,7 @@ class SimulatorSpec extends BaseSpec {
 
     "process correctly simultaneous events" in {
       val (out, comp) = buildComponent { nand(nand(High, Low), nand(High, Low)) }
-      val state = Sim.runComponent(comp)
+      val state = Sim.setupAndRun(comp)
       state.get(out) must beSome(false)
     }
 
@@ -65,7 +65,7 @@ class SimulatorSpec extends BaseSpec {
           val Instance(comp, f) = spec.instance
           (comp(sigs), f(sigs.map(_.toBool)))
         }
-        val state = Sim.runComponent(comp)
+        val state = Sim.setupAndRun(comp)
         state.get(out) must beSome(expected)
       }
     }

@@ -9,17 +9,11 @@ import util.UnionFind
 object Sim {
   val WireDelay = 1
 
-  inline def runComponent(root: Component, maxTicks: Option[Int] = None): SimState =
-    runCircuit(build(root), maxTicks)
+  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): SimState =
+    SimSetup.setup(Circuit(root, extraWires))
 
-  inline def runCircuit(c: Circuit, maxTicks: Option[Int] = None): SimState =
-    run(setup(c), maxTicks)
-
-  inline def build(root: Component, extraWires: List[(Port, Port)] = Nil): Circuit =
-    Circuit(root, extraWires)
-
-  inline def setup(c: Circuit): SimState =
-    SimSetup.setup(c)
+  inline def setupAndRun(root: Component, maxTicks: Option[Int] = None): SimState =
+    run(setup(root), maxTicks)
 
   @tailrec def run(st: SimState, maxTicks: Option[Int] = None): SimState =
     step(st, maxTicks) match {

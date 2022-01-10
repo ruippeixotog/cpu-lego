@@ -106,14 +106,14 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
 
     "start at High" in {
       val (out, comp) = buildComponent { clock(100) }
-      val state = Sim.runComponent(comp, Some(0))
+      val state = Sim.setupAndRun(comp, Some(0))
       state.get(out) must beSome(true)
     }
 
     "toggle its value according to its frequency" in {
       forAll(Gen.choose(10, 1000), Gen.choose(10, 1000)) { (freq, simEnd) =>
         val (out, comp) = buildComponent { clock(freq) }
-        val state = Sim.runComponent(comp, Some(simEnd))
+        val state = Sim.setupAndRun(comp, Some(simEnd))
         state.get(out) must beSome((simEnd / freq) % 2 == 0)
       }
     }
