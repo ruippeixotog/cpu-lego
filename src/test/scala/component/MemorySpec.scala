@@ -244,14 +244,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "be set to the input on clock positive edge when load is High" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
       val sim = Sim.setupAndRun(comp, Some(250))
-      outs.map(sim.get).sequence must beSome.which { bools =>
+      sim.get(outs).sequence must beSome.which { bools =>
         bools must beEqualTo(ins.map(_.toBool))
       }
     }
 
     "be set unconditionally to Low when clear is Low" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, sim) = buildAndRun { register(ins, Low, Low, clear = Low) }
-      outs.map(sim.get).sequence must beSome(List.fill(ins.length)(false))
+      sim.get(outs).sequence must beSome(List.fill(ins.length)(false))
     }
 
     "retain its original value outside positive edges or when load is Low" in {
@@ -306,7 +306,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
             expectedOuts = Vector.fill(n)(Some(false))
           }
           .check { sim =>
-            outs.map(sim.get) must beEqualTo(expectedOuts)
+            sim.get(outs) must beEqualTo(expectedOuts)
           }
           .run()
       }
@@ -321,7 +321,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       outs must haveLength(2)
 
       def getOutAsInt(sim: Sim): Option[Int] =
-        outs.map(sim.get).sequence.map(_.toInt)
+        sim.get(outs).sequence.map(_.toInt)
 
       runPlan(
         comp,
@@ -355,7 +355,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
           .whenLow(clear) { _ => expectedOut = 0 }
           .check { sim =>
-            outs.map(sim.get).sequence.map(_.toInt) must beSome(expectedOut)
+            sim.get(outs).sequence.map(_.toInt) must beSome(expectedOut)
           }
           .run()
       }
@@ -379,10 +379,10 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .onNegEdge(clk) { sim =>
             expectedOut = (expectedOut + 1) % (1 << n)
           }
-          .whenHigh(load) { sim => expectedOut = ps.map(sim.get).sequence.get.toInt }
+          .whenHigh(load) { sim => expectedOut = sim.get(ps).sequence.get.toInt }
           .whenLow(clear) { _ => expectedOut = 0 }
           .check { sim =>
-            outs.map(sim.get).sequence.map(_.toInt) must beSome(expectedOut)
+            sim.get(outs).sequence.map(_.toInt) must beSome(expectedOut)
           }
           .run()
       }
@@ -426,14 +426,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         var mem: Array[Vector[Option[Boolean]]] = Array.fill(1 << addrN)(Vector.fill(inN)(None))
 
-        def addrIdx(sim: Sim) = addr.map(sim.get).sequence.get.toInt
+        def addrIdx(sim: Sim) = sim.get(addr).sequence.get.toInt
 
         SequentialScenario(comp)
           .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
           .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
-          .whenHigh(we) { sim => mem(addrIdx(sim)) = ins.map(sim.get) }
+          .whenHigh(we) { sim => mem(addrIdx(sim)) = sim.get(ins) }
           .check { sim =>
-            outs.map(sim.get) must beEqualTo(
+            sim.get(outs) must beEqualTo(
               if (sim.get(ce) == Some(true)) mem(addrIdx(sim))
               else Vector.fill(inN)(None)
             )
@@ -453,12 +453,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           val (outs, comp) = buildComponent { rom(data, addr) }
           outs must haveLength(data.head.length)
 
-          def addrIdx(sim: Sim) = addr.map(sim.get).sequence.get.toInt
+          def addrIdx(sim: Sim) = sim.get(addr).sequence.get.toInt
 
           SequentialScenario(comp)
             .withPorts(addr -> false)
             .check { sim =>
-              outs.map(sim.get) must beEqualTo(data(addrIdx(sim)).map(Some.apply))
+              sim.get(outs) must beEqualTo(data(addrIdx(sim)).map(Some.apply))
             }
             .run()
         }

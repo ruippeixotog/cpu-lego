@@ -33,7 +33,7 @@ class ArithmeticSpec extends BaseSpec {
       val (in1, in2) = ins.unzip
       val ((outs, carry), sim) = buildAndRun { binaryAdder(in1, in2) }
 
-      (outs :+ carry).map(sim.get).sequence must beSome.which { bools =>
+      sim.get(outs :+ carry).sequence must beSome.which { bools =>
         bools.toInt must beEqualTo(in1.toInt + in2.toInt)
       }
     }
@@ -46,7 +46,7 @@ class ArithmeticSpec extends BaseSpec {
       val (in1, in2) = ins.unzip
       val (outs, sim) = buildAndRun { addSub(in1, in2, Low) }
 
-      outs.map(sim.get).sequence must beSome.which { bools =>
+      sim.get(outs).sequence must beSome.which { bools =>
         bools.toInt.truncate(n) must beEqualTo((in1.toInt + in2.toInt).truncate(n))
       }
     }
@@ -56,7 +56,7 @@ class ArithmeticSpec extends BaseSpec {
       val (in1, in2) = ins.unzip
       val (outs, sim) = buildAndRun { addSub(in1, in2, High) }
 
-      outs.map(sim.get).sequence must beSome.which { bools =>
+      sim.get(outs).sequence must beSome.which { bools =>
         bools.toInt.truncate(n) must beEqualTo((in1.toInt - in2.toInt).truncate(n))
       }
     }

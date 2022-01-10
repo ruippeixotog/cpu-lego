@@ -38,12 +38,7 @@ final case class Sim(
   def get(port: Port): Option[Boolean] =
     portValues(port).orElse(groupValues(c.groupOf(port)))
 
-  def setAfter(after: Long, port: Port, newValue: Option[Boolean]): Sim =
-    schedule(after, PortChange(port, newValue))
-
-  inline def setAfter(after: Long, port: Port, newValue: Boolean): Sim = setAfter(after, port, Some(newValue))
-  inline def unsetAfter(after: Long, port: Port): Sim = setAfter(after, port, None)
-  inline def toggleAfter(after: Long, port: Port): Sim = setAfter(after, port, get(port).map(!_))
+  inline def get(bus: Vector[Port]): Vector[Option[Boolean]] = bus.map(get)
 
   def set(port: Port, newValue: Option[Boolean]): Sim =
     schedule(0, PortChange(port, newValue))
@@ -51,6 +46,13 @@ final case class Sim(
   inline def set(port: Port, newValue: Boolean): Sim = set(port, Some(newValue))
   inline def unset(port: Port): Sim = set(port, None)
   inline def toggle(port: Port): Sim = set(port, get(port).map(!_))
+
+  def setAfter(after: Long, port: Port, newValue: Option[Boolean]): Sim =
+    schedule(after, PortChange(port, newValue))
+
+  inline def setAfter(after: Long, port: Port, newValue: Boolean): Sim = setAfter(after, port, Some(newValue))
+  inline def unsetAfter(after: Long, port: Port): Sim = setAfter(after, port, None)
+  inline def toggleAfter(after: Long, port: Port): Sim = setAfter(after, port, get(port).map(!_))
 
   def watch(port: Port, callback: Sim => Sim): Sim =
     copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))

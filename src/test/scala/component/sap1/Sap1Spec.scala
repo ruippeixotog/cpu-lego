@@ -22,7 +22,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       s"emit the correct words on a $op instruction" in {
         val instr = (0 until 4).map { i => if ((opcode & (1 << i)) == 0) Low else High }.toVector
         val clk, clr = newPort()
-        val (con, comp) = buildComponent { sequencer(instr, clk, clr) }
+        val (ControlBus(con), comp) = buildComponent { sequencer(instr, clk, clr) }
 
         var t = 0
         val expectedCon = Vector(
@@ -36,7 +36,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
           .onStart { _ => t = 0 }
           .onNegEdge(clk) { _ => t = (t + 1) % 6 }
           .whenLow(clr) { _ => t = 0 }
-          .check { sim => con.con.map(sim.get).sequence must beSome(expectedCon(t)) }
+          .check { sim => sim.get(con).sequence must beSome(expectedCon(t)) }
           .run()
       }
     }
@@ -67,19 +67,19 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         }
         .onPosEdge(clk) { sim =>
           if (sim.get(load) == Some(true)) {
-            expectedReg = ins.map(sim.get)
+            expectedReg = sim.get(ins)
           }
         }
         .whenLow(clr) { _ =>
           expectedReg = expectedReg.slice(0, 4) ++ Vector.fill(4)(Some(false))
         }
         .check { sim =>
-          bus.slice(0, 4).map(sim.get) aka "the bus" must beEqualTo(
+          sim.get(bus.slice(0, 4)) aka "the bus" must beEqualTo(
             if (sim.get(enable) == Some(true)) expectedReg.slice(0, 4)
-            else if (sim.get(load) == Some(true)) ins.slice(0, 4).map(sim.get)
+            else if (sim.get(load) == Some(true)) sim.get(ins.slice(0, 4))
             else Vector.fill(4)(None)
           )
-          instr.map(sim.get) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))
+          sim.get(instr) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))
         }
         .run()
     }
