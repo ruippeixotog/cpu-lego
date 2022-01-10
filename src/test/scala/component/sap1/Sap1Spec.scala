@@ -37,7 +37,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
           .onStart { _ => t = 0 }
           .onNegEdge(clk) { _ => t = (t + 1) % 6 }
           .whenLow(clr) { _ => t = 0 }
-          .check { state => con.bus.map(state.get).sequence must beSome(expectedCon(t)) }
+          .check { state => con.con.map(state.get).sequence must beSome(expectedCon(t)) }
           .run()
       }
     }

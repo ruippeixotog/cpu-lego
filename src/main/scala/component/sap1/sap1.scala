@@ -7,10 +7,10 @@ import core._
 import ControlBus._
 import ControlBus.Bit._
 
-case class Input(prog: Port, write: Port, addr: Bus, data: Bus, clr: Port, step: Port, auto: Port)
+case class Input(prog: Port, write: Port, addr: Bus, data: Bus)
 
-case class ControlBus(bus: Bus) {
-  def apply(b: ControlBus.Bit) = bus(b.ordinal)
+case class ControlBus(con: Bus) {
+  def apply(b: ControlBus.Bit) = con(b.ordinal)
 }
 
 object ControlBus {
@@ -20,38 +20,26 @@ object ControlBus {
     bits.foldLeft(Vector.fill(12)(false)) { (vec, b) => vec.updated(b.ordinal, true) }
 }
 
-def sap1(sapIn: Input): Spec[Bus] = newSpec {
+def sap1(clk: Port, clr: Port, ramInput: Input): Spec[(Port, Bus)] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
-  val (clk, clr) = controller(sapIn, instr)
+  val hlt = multi(and)(instr: _*)
   val con = sequencer(instr, clk, clr)
 
   instrRegister(bus, con(Li), clk, clr, con(Ei)) ~> instr
 
-  progCounter(bus, con(Cp), not(clk), not(clr), con(Ep))
+  progCounter(bus, con(Cp), not(clk), clr, con(Ep))
 
   val mOut = register(bus.take(4), con(Lm), clk)
-  ram(bus, mOut, con(Ce), sapIn)
+  ram(bus, mOut, con(Ce), ramInput)
 
   val aOut = accumulator(bus, clk, con(La), con(Ea))
   val bOut = register(bus, con(Lb), clk)
   alu(bus, aOut, bOut, con(Su), con(Eu))
 
-  register(bus, con(Lo), clk)
-}
-
-def controller(sapIn: Input, instr: Bus): Spec[(Port, Port)] = newSpec {
-  val nhlt = not(multi(and)(instr: _*))
-
-  val (clr, _) = flipflop(sapIn.clr, not(sapIn.clr))
-  val (step, _) = flipflop(sapIn.step, not(sapIn.step))
-  val (manual, auto) = flipflop(not(sapIn.auto), sapIn.auto)
-  val clk = nand(
-    nand(manual, and(nhlt, step)),
-    nand(auto, jkFlipFlop(nhlt, nhlt, clock(10000), clr)._1)
-  )
-  (clk, clr)
+  val oOut = register(bus, con(Lo), clk)
+  (hlt, oOut)
 }
 
 def sequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
