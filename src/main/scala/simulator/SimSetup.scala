@@ -30,24 +30,22 @@ object SimSetup {
             s.setAfter(GateDelay, q, v).setAfter(GateDelay, nq, !v)
           }
         }
-        sim.watch(set, propagate).watch(reset, propagate)
+        sim.watch(set)(propagate).watch(reset)(propagate)
 
       case (sim, Clock(freq, out)) =>
-        sim.set(out, true).watch(out, _.toggleAfter(freq, out))
+        sim.set(out, true).watch(out)(_.toggleAfter(freq, out))
 
       case (sim, PosEdge(in, out)) =>
         sim
           .set(out, false)
-          .watch(
-            in,
-            st =>
-              st.get(in) match {
-                case Some(true) =>
-                  st.setAfter(GateDelay, out, true).setAfter(GateDelay + PosEdgeDelay, out, false)
-                case _ =>
-                  st
-              }
-          )
+          .watch(in) { st =>
+            st.get(in) match {
+              case Some(true) =>
+                st.setAfter(GateDelay, out, true).setAfter(GateDelay + PosEdgeDelay, out, false)
+              case _ =>
+                st
+            }
+          }
 
       case (sim, Switch(in, out, enable)) =>
         binaryOp(sim, enable, in, out, 0) {
@@ -64,6 +62,6 @@ object SimSetup {
     def propagate(s: Sim): Sim =
       s.setAfter(delay, out, f(s.get(port1), s.get(port2)))
 
-    sim.watch(port1, propagate).watch(port2, propagate)
+    sim.watch(port1)(propagate).watch(port2)(propagate)
   }
 }

@@ -54,7 +54,7 @@ final case class Sim(
   inline def unsetAfter(after: Long, port: Port): Sim = setAfter(after, port, None)
   inline def toggleAfter(after: Long, port: Port): Sim = setAfter(after, port, get(port).map(!_))
 
-  def watch(port: Port, callback: Sim => Sim): Sim =
+  def watch(port: Port)(callback: Sim => Sim): Sim =
     copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
 
   @tailrec def run(maxTicks: Option[Int] = None): Sim =
