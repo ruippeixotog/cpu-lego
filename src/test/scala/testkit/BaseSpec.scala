@@ -29,7 +29,7 @@ abstract class BaseSpec extends Specification with ScalaCheck {
   def runPlan(comp: Component, plan: (Int, SimState => Result | SimState)*): Result = {
     var state = Sim.setup(comp)
     foreach(plan.toList.sortBy(_._1)) { case (tick, f) =>
-      state = Sim.run(state, Some(tick))
+      state = state.run(Some(tick))
       f(state) match {
         case r: Result => r.updateMessage(s"At t=$tick: " + _)
         case st: SimState => state = st; ok

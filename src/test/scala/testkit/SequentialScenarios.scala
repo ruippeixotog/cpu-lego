@@ -69,7 +69,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
     def runTestCase(actions: Seq[(Port, Boolean)]): Result = {
       var state = Sim.setupAndRun(comp)
       ports.foreach { case (port, newVal) => state = state.schedule(0, PortChange(port, newVal)) }
-      state = Sim.run(state)
+      state = state.run()
       onStartFunc(state)
 
       foreach(actions) { case (port, newVal) =>
@@ -77,7 +77,7 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
         beforeActionFuncs.foreach { f => state = f(state, port, newVal, oldVal) }
 
         state = state.schedule(0, PortChange(port, Some(newVal)))
-        state = Sim.run(state)
+        state = state.run()
 
         onActionFuncs.foreach(_(state, port, newVal, oldVal))
         checkFunc(state)
