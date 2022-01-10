@@ -5,49 +5,47 @@ import scala.quoted._
 import component.BuilderAPI._
 import core._
 
+import BuilderAPIMacros._
+
 object BuilderAPIMacros {
 
-  class NamedPort(ownerName: Option[String], portName: String) extends Port {
-    override def toString = ownerName.fold("")(_ + ".") + portName
+  class NamedPort(owner: Option[String], name: String) extends Port {
+    override def toString = owner.fold("")(_ + ".") + name
   }
 
   def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
-    registerNewPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
+    BuilderAPIMacros().newBus(n)
 
   def newPort()(using Quotes): Expr[Port] =
+    BuilderAPIMacros().newPort()
+
+  def newSpec[A: Type](spec: Expr[Spec[A]])(using Quotes): Expr[A] =
+    BuilderAPIMacros().newSpec(spec)
+}
+
+class BuilderAPIMacros()(using qctx: Quotes) {
+  import qctx.reflect._
+
+  def newBus(n: Expr[Int]): Expr[Bus] =
+    registerNewPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
+
+  def newPort(): Expr[Port] =
     registerNewPort(newPort(None))
 
-  def newPort(idxExpr: Option[Expr[Int]])(using qctx: Quotes): Expr[Port] = {
-    import qctx.reflect._
-
-    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
-    lazy val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
-    lazy val classOwner = owners.find(_.isClassDef).get
-
+  def newPort(idxExpr: Option[Expr[Int]]): Expr[Port] = {
     val portName = Expr(macroOwner.name)
     val portNameWithIdx = idxExpr.fold(portName)(lbl => '{ $portName + "[" + $lbl + "]" })
 
-    val thisRef = This(classOwner)
-    val fallbackOwnerExpr =
-      if (thisRef.tpe <:< TypeRepr.of[Component]) Some('{ ${ thisRef.asExpr }.toString })
-      else None
-
     val ownerExpr =
-      (Expr.summon[BuilderEnv], fallbackOwnerExpr) match {
-        case (Some(env), Some(fallback)) => '{ Some($env.componentName.getOrElse($fallback)) }
-        case (Some(env), None) => '{ $env.componentName }
-        case (None, Some(fallback)) => '{ Some($fallback) }
-        case (None, None) => '{ None }
+      Expr.summon[BuilderEnv] match {
+        case Some(env) => '{ $env.componentName }
+        case None => '{ None }
       }
 
     '{ new NamedPort($ownerExpr, $portNameWithIdx) }
   }
 
-  def newSpec[A: Type](spec: Expr[Spec[A]])(using qctx: Quotes): Expr[A] = {
-    import qctx.reflect._
-
-    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
-    lazy val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
+  def newSpec[A: Type](spec: Expr[Spec[A]]): Expr[A] = {
     val compName = Expr(macroOwner.name)
 
     def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
@@ -81,8 +79,13 @@ object BuilderAPIMacros {
 
   // ---------
 
-  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A])(using qctx: Quotes): Expr[Unit] = {
-    import qctx.reflect._
+  private def owners: Iterator[Symbol] =
+    Iterator.iterate(Symbol.spliceOwner)(_.owner)
+
+  private lazy val macroOwner: Symbol =
+    owners.find(!_.flags.is(Flags.Synthetic)).get
+
+  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A]): Expr[Unit] = {
     expr match {
       case '{ $port: Port } =>
         '{ $env.register(${ Expr(name) }, $port) }
@@ -113,11 +116,7 @@ object BuilderAPIMacros {
     }
   }
 
-  def registerNewPort[A <: Port | Bus: Type](portExpr: Expr[A])(using qctx: Quotes): Expr[A] = {
-    import qctx.reflect._
-
-    def owners = Iterator.iterate(Symbol.spliceOwner)(_.owner)
-    val macroOwner = owners.find(!_.flags.is(Flags.Synthetic)).get
+  def registerNewPort[A <: Port | Bus: Type](portExpr: Expr[A]): Expr[A] = {
     val portName = Expr(macroOwner.name)
 
     Expr.summon[BuilderEnv] match {
