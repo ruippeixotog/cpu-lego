@@ -19,12 +19,12 @@ class ControlSpec extends BaseSpec {
 
     "select a single output based on the combination of inputs" in {
       forAll { (ins: Vector[LogicLevel], enable: LogicLevel) =>
-        val (outs, state) = buildAndRun { decoder(ins, enable) }
+        val (outs, sim) = buildAndRun { decoder(ins, enable) }
         outs must haveLength(1 << ins.length)
 
         val expectedIdx = ins.toInt
         foreach(outs.zipWithIndex) { (out, idx) =>
-          state.get(out) must beEqualTo(Some(enable.toBool && idx == expectedIdx))
+          sim.get(out) must beEqualTo(Some(enable.toBool && idx == expectedIdx))
         }
       }
     }
@@ -35,8 +35,8 @@ class ControlSpec extends BaseSpec {
     "act as an N-to-1 multiplexer" in {
       forAll { (sel: Vector[LogicLevel]) =>
         forAll(Gen.listOfN(1 << sel.length, genLogicLevel).map(_.toVector)) { ins =>
-          val (out, state) = buildAndRun { mux(ins, sel) }
-          state.get(out) must beSome(ins(sel.toInt).toBool)
+          val (out, sim) = buildAndRun { mux(ins, sel) }
+          sim.get(out) must beSome(ins(sel.toInt).toBool)
         }
       }
     }

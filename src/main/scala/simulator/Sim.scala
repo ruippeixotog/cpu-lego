@@ -6,50 +6,62 @@ import scala.collection.immutable.TreeMap
 import core._
 import util.UnionFind
 
+import Sim.Event._
+
 object Sim {
   val WireDelay = 1
 
-  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): SimState =
+  enum Event {
+    case PortChange(port: Port, value: Option[Boolean])
+    case PortGroupDrive(group: PortGroup)
+  }
+
+  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): Sim =
     SimSetup.setup(Circuit(root, extraWires))
 
-  inline def setupAndRun(root: Component, maxTicks: Option[Int] = None): SimState =
+  inline def setupAndRun(root: Component, maxTicks: Option[Int] = None): Sim =
     setup(root).run(maxTicks)
 }
 
-trait SimEvent
-case class PortChange(port: Port, value: Option[Boolean]) extends SimEvent
-case class PortGroupDrive(group: PortGroup) extends SimEvent
-
-final case class SimState(
+final case class Sim(
     c: Circuit,
     t: Long = 0,
-    events: TreeMap[Long, Vector[SimEvent]] = TreeMap(),
+    events: TreeMap[Long, Vector[Sim.Event]] = TreeMap(),
     portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
-    portObservers: Map[Port, List[SimState => SimState]] = Map().withDefaultValue(Nil),
+    portObservers: Map[Port, List[Sim => Sim]] = Map().withDefaultValue(Nil),
     groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
 ) {
 
-  def get(port: Port): Option[Boolean] = {
-    portValues(port).orElse(groupValues(c.groupOf(port)))
-  }
-
-  def set(port: Port, value: Option[Boolean]): SimState = {
-    portObservers(port).foldLeft(copy(portValues = portValues + ((port, value)))) { case (st, f) => f(st) }
-  }
-
-  def watch(port: Port, callback: SimState => SimState): SimState =
-    copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
-
-  def schedule(after: Long, ev: SimEvent): SimState =
+  private def schedule(after: Long, ev: Sim.Event): Sim =
     copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
 
-  @tailrec def run(maxTicks: Option[Int] = None): SimState =
+  def get(port: Port): Option[Boolean] =
+    portValues(port).orElse(groupValues(c.groupOf(port)))
+
+  def setAfter(after: Long, port: Port, newValue: Option[Boolean]): Sim =
+    schedule(after, PortChange(port, newValue))
+
+  inline def setAfter(after: Long, port: Port, newValue: Boolean): Sim = setAfter(after, port, Some(newValue))
+  inline def unsetAfter(after: Long, port: Port): Sim = setAfter(after, port, None)
+  inline def toggleAfter(after: Long, port: Port): Sim = setAfter(after, port, get(port).map(!_))
+
+  def set(port: Port, newValue: Option[Boolean]): Sim =
+    schedule(0, PortChange(port, newValue))
+
+  inline def set(port: Port, newValue: Boolean): Sim = set(port, Some(newValue))
+  inline def unset(port: Port): Sim = set(port, None)
+  inline def toggle(port: Port): Sim = set(port, get(port).map(!_))
+
+  def watch(port: Port, callback: Sim => Sim): Sim =
+    copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
+
+  @tailrec def run(maxTicks: Option[Int] = None): Sim =
     step(maxTicks) match {
       case None => this
       case Some(next) => next.run(maxTicks)
     }
 
-  def step(maxTicks: Option[Int] = None): Option[SimState] = {
+  def step(maxTicks: Option[Int] = None): Option[Sim] = {
     if (events.isEmpty) return None
 
     val (t1, evs) = events.head
@@ -65,7 +77,11 @@ final case class SimState(
       ev match {
         case PortChange(port, newValue) =>
           if (newValue == st.portValues(port)) st
-          else st.set(port, newValue).schedule(Sim.WireDelay, PortGroupDrive(st.c.groupOf(port)))
+          else {
+            st.portObservers(port)
+              .foldLeft(st.copy(portValues = st.portValues + ((port, newValue)))) { (st, f) => f(st) }
+              .schedule(Sim.WireDelay, PortGroupDrive(st.c.groupOf(port)))
+          }
 
         case PortGroupDrive(group) =>
           val groupPorts = st.c.portsOf(group).toList

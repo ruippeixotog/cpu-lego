@@ -55,8 +55,8 @@ class SimulatorSpec extends BaseSpec {
 
     "process correctly simultaneous events" in {
       val (out, comp) = buildComponent { nand(nand(High, Low), nand(High, Low)) }
-      val state = Sim.setupAndRun(comp)
-      state.get(out) must beSome(false)
+      val sim = Sim.setupAndRun(comp)
+      sim.get(out) must beSome(false)
     }
 
     "compute complex boolean expression trees" in forAll { (spec: Spec) =>
@@ -65,8 +65,8 @@ class SimulatorSpec extends BaseSpec {
           val Instance(comp, f) = spec.instance
           (comp(sigs), f(sigs.map(_.toBool)))
         }
-        val state = Sim.setupAndRun(comp)
-        state.get(out) must beSome(expected)
+        val sim = Sim.setupAndRun(comp)
+        sim.get(out) must beSome(expected)
       }
     }
 
@@ -79,11 +79,11 @@ class SimulatorSpec extends BaseSpec {
       runPlan(
         comp,
         100 -> { _.get(bus) must beNone },
-        200 -> { _.schedule(0, PortChange(in1, Some(false))).schedule(0, PortChange(in2, Some(true))) },
+        200 -> { _.set(in1, Some(false)).set(in2, Some(true)) },
         300 -> { _.get(bus) must beNone },
-        400 -> { _.schedule(0, PortChange(load1, Some(true))) },
+        400 -> { _.set(load1, Some(true)) },
         500 -> { _.get(bus) must beSome(false) },
-        600 -> { _.schedule(0, PortChange(load1, Some(false))).schedule(0, PortChange(load2, Some(true))) },
+        600 -> { _.set(load1, Some(false)).set(load2, Some(true)) },
         700 -> { _.get(bus) must beSome(true) }
       )
     }

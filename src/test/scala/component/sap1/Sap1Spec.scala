@@ -5,7 +5,6 @@ import component._
 import component.sap1.ControlBus.Bit._
 import core._
 import org.specs2.specification.core.Fragment
-import simulator.PortChange
 import testkit._
 
 class Sap1Spec extends BaseSpec with SequentialScenarios {
@@ -37,7 +36,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
           .onStart { _ => t = 0 }
           .onNegEdge(clk) { _ => t = (t + 1) % 6 }
           .whenLow(clr) { _ => t = 0 }
-          .check { state => con.con.map(state.get).sequence must beSome(expectedCon(t)) }
+          .check { sim => con.con.map(sim.get).sequence must beSome(expectedCon(t)) }
           .run()
       }
     }
@@ -62,25 +61,25 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         }
         .beforeAction {
           // ensure `enable` and `load` are not High at the same time
-          case (state, `enable`, true, _) => state.schedule(0, PortChange(load, Some(false)))
-          case (state, `load`, true, _) => state.schedule(0, PortChange(enable, Some(false)))
-          case (state, _, _, _) => state
+          case (sim, `enable`, true, _) => sim.set(load, false)
+          case (sim, `load`, true, _) => sim.set(enable, false)
+          case (sim, _, _, _) => sim
         }
-        .onPosEdge(clk) { state =>
-          if (state.get(load) == Some(true)) {
-            expectedReg = ins.map(state.get)
+        .onPosEdge(clk) { sim =>
+          if (sim.get(load) == Some(true)) {
+            expectedReg = ins.map(sim.get)
           }
         }
         .whenLow(clr) { _ =>
           expectedReg = expectedReg.slice(0, 4) ++ Vector.fill(4)(Some(false))
         }
-        .check { state =>
-          bus.slice(0, 4).map(state.get) aka "the bus" must beEqualTo(
-            if (state.get(enable) == Some(true)) expectedReg.slice(0, 4)
-            else if (state.get(load) == Some(true)) ins.slice(0, 4).map(state.get)
+        .check { sim =>
+          bus.slice(0, 4).map(sim.get) aka "the bus" must beEqualTo(
+            if (sim.get(enable) == Some(true)) expectedReg.slice(0, 4)
+            else if (sim.get(load) == Some(true)) ins.slice(0, 4).map(sim.get)
             else Vector.fill(4)(None)
           )
-          instr.map(state.get) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))
+          instr.map(sim.get) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))
         }
         .run()
     }

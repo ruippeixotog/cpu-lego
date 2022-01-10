@@ -7,7 +7,7 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import simulator.{Circuit, PortChange, Sim, SimSetup, SimState}
+import simulator.{Circuit, Sim, SimSetup}
 import testkit._
 
 class CoreSpec extends BaseSpec with SequentialScenarios {
@@ -21,40 +21,37 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         case (Some(High), Some(High)) => Some(false)
         case _ => None
       }
-      val (out, state) = buildAndRun { nand(in1.toPort, in2.toPort) }
-      state.get(out) must beEqualTo(expected)
+      val (out, sim) = buildAndRun { nand(in1.toPort, in2.toPort) }
+      sim.get(out) must beEqualTo(expected)
     }
   }
 
   "A Flipflop" should {
 
     "start unset" in {
-      val ((q, nq), state) = buildAndRun { flipflop(new Port, new Port) }
-      state.get(q) must beNone
-      state.get(nq) must beNone
+      val ((q, nq), sim) = buildAndRun { flipflop(new Port, new Port) }
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
     }
 
     "be set to High when S is set to High" in {
-      val ((q, nq), state) = buildAndRun { flipflop(High, Low) }
-      state.get(q) must beSome(true)
-      state.get(nq) must beSome(false)
+      val ((q, nq), sim) = buildAndRun { flipflop(High, Low) }
+      sim.get(q) must beSome(true)
+      sim.get(nq) must beSome(false)
     }
 
     "be set to Low when R is set to High" in {
-      val ((q, nq), state) = buildAndRun { flipflop(Low, High) }
-      state.get(q) must beSome(false)
-      state.get(nq) must beSome(true)
+      val ((q, nq), sim) = buildAndRun { flipflop(Low, High) }
+      sim.get(q) must beSome(false)
+      sim.get(nq) must beSome(true)
     }
 
     "retain its original value when both S and R are High" in {
       val set, reset = newPort()
       val ((q, nq), comp) = buildComponent { flipflop(set, reset) }
 
-      def setInputs(s: Boolean, r: Boolean)(state: SimState) = {
-        state
-          .schedule(0, PortChange(set, Some(s)))
-          .schedule(0, PortChange(reset, Some(r)))
-      }
+      def setInputs(s: Boolean, r: Boolean)(sim: Sim) =
+        sim.set(set, s).set(reset, r)
 
       runPlan(
         comp,
@@ -83,20 +80,20 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         .onStart { _ => expectedQ = None }
         .beforeAction {
           // ensure `set` and `reset` are not High at the same time
-          case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
-          case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
-          case (state, _, _, _) => state
+          case (sim, `set`, true, _) => sim.set(reset, false)
+          case (sim, `reset`, true, _) => sim.set(set, false)
+          case (sim, _, _, _) => sim
         }
-        .onAction { (state, _, _, _) =>
-          expectedQ = (state.get(set), state.get(reset)) match {
+        .onAction { (sim, _, _, _) =>
+          expectedQ = (sim.get(set), sim.get(reset)) match {
             case (Some(true), _) => Some(true)
             case (_, Some(true)) => Some(false)
             case _ => expectedQ
           }
         }
-        .check { state =>
-          state.get(q) must beEqualTo(expectedQ)
-          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        .check { sim =>
+          sim.get(q) must beEqualTo(expectedQ)
+          sim.get(nq) must beEqualTo(expectedQ.map(!_))
         }
         .run()
     }
@@ -106,15 +103,15 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
 
     "start at High" in {
       val (out, comp) = buildComponent { clock(100) }
-      val state = Sim.setupAndRun(comp, Some(0))
-      state.get(out) must beSome(true)
+      val sim = Sim.setupAndRun(comp, Some(0))
+      sim.get(out) must beSome(true)
     }
 
     "toggle its value according to its frequency" in {
       forAll(Gen.choose(10, 1000), Gen.choose(10, 1000)) { (freq, simEnd) =>
         val (out, comp) = buildComponent { clock(freq) }
-        val state = Sim.setupAndRun(comp, Some(simEnd))
-        state.get(out) must beSome((simEnd / freq) % 2 == 0)
+        val sim = Sim.setupAndRun(comp, Some(simEnd))
+        sim.get(out) must beSome((simEnd / freq) % 2 == 0)
       }
     }
   }
@@ -122,8 +119,8 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
   "A PosEdge" should {
 
     "output Low when unchanged" in forAll { (in: LogicLevel) =>
-      val (out, state) = buildAndRun { posEdge(in) }
-      state.get(out) must beSome(false)
+      val (out, sim) = buildAndRun { posEdge(in) }
+      sim.get(out) must beSome(false)
     }
 
     "output High when the input changes from Low to High" in {
@@ -131,9 +128,9 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       // expected delay from clock out to posEdge out
       val delay = Sim.WireDelay + SimSetup.GateDelay
 
-      foreachTick(comp, 250) { (tick, state) =>
+      foreachTick(comp, 250) { (tick, sim) =>
         // Positive edge triggering for clock(50) occurs at t=0,100,200...
-        state.get(out) must beSome((tick - delay + 100) % 100 < SimSetup.PosEdgeDelay)
+        sim.get(out) must beSome((tick - delay + 100) % 100 < SimSetup.PosEdgeDelay)
       }
     }
   }
@@ -141,8 +138,8 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
   "A Switch" should {
 
     "behave as a controlled switch" in forAll { (in: Option[LogicLevel], enable: LogicLevel) =>
-      val (out, state) = buildAndRun { switch(in.toPort, enable) }
-      state.get(out) must beEqualTo(if (enable == High) in.map(_.toBool) else None)
+      val (out, sim) = buildAndRun { switch(in.toPort, enable) }
+      sim.get(out) must beEqualTo(if (enable == High) in.map(_.toBool) else None)
     }
 
     "behave well under any port change sequence" in {
@@ -151,9 +148,9 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
 
       SequentialScenario(comp)
         .withPorts(in, enable -> false)
-        .check { state =>
-          state.get(out) must beEqualTo(
-            if (state.get(enable) == Some(true)) state.get(in) else None
+        .check { sim =>
+          sim.get(out) must beEqualTo(
+            if (sim.get(enable) == Some(true)) sim.get(in) else None
           )
         }
         .run()

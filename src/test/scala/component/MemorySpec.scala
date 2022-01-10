@@ -4,7 +4,7 @@ import component.BuilderAPI._
 import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
-import simulator.{PortChange, Sim, SimState}
+import simulator.Sim
 import testkit._
 
 class MemorySpec extends BaseSpec with SequentialScenarios {
@@ -20,50 +20,47 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { latchClocked(new Port, new Port, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(1000))
-      state.get(q) must beNone
-      state.get(nq) must beNone
+      val sim = Sim.setupAndRun(comp, Some(1000))
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
     }
 
     "remain unset while clk is Low" in {
-      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, Low) }
-      state.get(q) must beNone
-      state.get(nq) must beNone
+      val ((q, nq), sim) = buildAndRun { latchClocked(High, Low, Low) }
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
     }
 
     "be set to High when S is set to High and clk is High" in {
-      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, High) }
-      state.get(q) must beSome(true)
-      state.get(nq) must beSome(false)
+      val ((q, nq), sim) = buildAndRun { latchClocked(High, Low, High) }
+      sim.get(q) must beSome(true)
+      sim.get(nq) must beSome(false)
     }
 
     "be set unconditionally to High when preset is Low" in {
-      val ((q, nq), state) = buildAndRun { latchClocked(Low, High, Low, preset = Low) }
-      state.get(q) must beSome(true)
-      state.get(nq) must beSome(false)
+      val ((q, nq), sim) = buildAndRun { latchClocked(Low, High, Low, preset = Low) }
+      sim.get(q) must beSome(true)
+      sim.get(nq) must beSome(false)
     }
 
     "be set to Low when R is set to High and clk is High" in {
-      val ((q, nq), state) = buildAndRun { latchClocked(Low, High, High) }
-      state.get(q) must beSome(false)
-      state.get(nq) must beSome(true)
+      val ((q, nq), sim) = buildAndRun { latchClocked(Low, High, High) }
+      sim.get(q) must beSome(false)
+      sim.get(nq) must beSome(true)
     }
 
     "be set unconditionally to Low when clear is Low" in {
-      val ((q, nq), state) = buildAndRun { latchClocked(High, Low, Low, clear = Low) }
-      state.get(q) must beSome(false)
-      state.get(nq) must beSome(true)
+      val ((q, nq), sim) = buildAndRun { latchClocked(High, Low, Low, clear = Low) }
+      sim.get(q) must beSome(false)
+      sim.get(nq) must beSome(true)
     }
 
     "retain its original value when both S and R are Low" in {
       val set, reset = new Port
       val ((q, nq), comp) = buildComponent { latchClocked(set, reset, clock(100)) }
 
-      def setInputs(s: Boolean, r: Boolean)(state: SimState) = {
-        state
-          .schedule(0, PortChange(set, Some(s)))
-          .schedule(0, PortChange(reset, Some(r)))
-      }
+      def setInputs(s: Boolean, r: Boolean)(sim: Sim) =
+        sim.set(set, s).set(reset, r)
 
       runPlan(
         comp,
@@ -92,20 +89,20 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         .onStart { _ => expectedQ = None }
         .beforeAction {
           // ensure `set` and `reset` are not High at the same time
-          case (state, `set`, true, _) => state.schedule(0, PortChange(reset, Some(false)))
-          case (state, `reset`, true, _) => state.schedule(0, PortChange(set, Some(false)))
-          case (state, _, _, _) => state
+          case (sim, `set`, true, _) => sim.set(reset, false)
+          case (sim, `reset`, true, _) => sim.set(set, false)
+          case (sim, _, _, _) => sim
         }
-        .whenHigh(clock) { state =>
-          expectedQ = (state.get(set), state.get(reset)) match {
+        .whenHigh(clock) { sim =>
+          expectedQ = (sim.get(set), sim.get(reset)) match {
             case (Some(true), _) => Some(true)
             case (_, Some(true)) => Some(false)
             case _ => expectedQ
           }
         }
-        .check { state =>
-          state.get(q) must beEqualTo(expectedQ)
-          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        .check { sim =>
+          sim.get(q) must beEqualTo(expectedQ)
+          sim.get(nq) must beEqualTo(expectedQ.map(!_))
         }
         .run()
     }
@@ -115,34 +112,30 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { dLatch(new Port, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(1000))
-      state.get(q) must beNone
-      state.get(nq) must beNone
+      val sim = Sim.setupAndRun(comp, Some(1000))
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
     }
 
     "be set to the input on positive edge trigger" in forAll { (in: LogicLevel) =>
       val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(250))
-      state.get(q) must beSome(in.toBool)
-      state.get(nq) must beSome(!in.toBool)
+      val sim = Sim.setupAndRun(comp, Some(250))
+      sim.get(q) must beSome(in.toBool)
+      sim.get(nq) must beSome(!in.toBool)
     }
 
     "retain its original value outside positive edges" in {
       val in = new Port
       val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
 
-      def setInput(d: Boolean)(state: SimState) = {
-        state.schedule(0, PortChange(in, Some(d)))
-      }
-
       runPlan(
         comp,
         25 -> { _.get(q) must beNone },
-        50 -> setInput(true),
+        50 -> { _.set(in, true) },
         75 -> { _.get(q) must beNone },
         150 -> { _.get(q) must beNone },
         250 -> { _.get(q) must beSome(true) },
-        300 -> setInput(false),
+        300 -> { _.set(in, false) },
         350 -> { _.get(q) must beSome(true) },
         450 -> { _.get(q) must beSome(false) }
       )
@@ -157,12 +150,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       SequentialScenario(comp)
         .withPorts(d, clock -> true)
         .onStart { _ => expectedQ = None }
-        .onPosEdge(clock) { state =>
-          expectedQ = state.get(d).orElse(expectedQ)
+        .onPosEdge(clock) { sim =>
+          expectedQ = sim.get(d).orElse(expectedQ)
         }
-        .check { state =>
-          state.get(q) must beEqualTo(expectedQ)
-          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        .check { sim =>
+          sim.get(q) must beEqualTo(expectedQ)
+          sim.get(nq) must beEqualTo(expectedQ.map(!_))
         }
         .run()
     }
@@ -172,28 +165,22 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { jkFlipFlop(new Port, new Port, clock(100), High) }
-      val state = Sim.setupAndRun(comp, Some(1000))
-      state.get(q) must beNone
-      state.get(nq) must beNone
+      val sim = Sim.setupAndRun(comp, Some(1000))
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
     }
 
     "toggle the output when both inputs are High" in {
       val j, k, clear = newPort()
       val ((q, nq), comp) = buildComponent { jkFlipFlop(j, k, clock(100), clear) }
 
-      def setClear(clr: Boolean)(state: SimState) =
-        state.schedule(0, PortChange(clear, Some(clr)))
-
-      def setInput(set: Boolean, reset: Boolean)(state: SimState) = {
-        state
-          .schedule(0, PortChange(j, Some(set)))
-          .schedule(0, PortChange(k, Some(reset)))
-      }
+      def setInput(set: Boolean, reset: Boolean)(sim: Sim) =
+        sim.set(j, set).set(k, reset)
 
       runPlan(
         comp,
-        10 -> setClear(false),
-        20 -> setClear(true),
+        10 -> { _.set(clear, false) },
+        20 -> { _.set(clear, true) },
         50 -> { _.get(q) must beSome(false) },
         50 -> setInput(true, false),
         75 -> { _.get(q) must beSome(false) },
@@ -217,8 +204,8 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       SequentialScenario(comp)
         .withPorts(j -> false, k -> false, clk -> true, clear -> false)
         .onStart { _ => expectedQ = Some(false) }
-        .onPosEdge(clk) { state =>
-          expectedQ = (state.get(j), state.get(k)) match {
+        .onPosEdge(clk) { sim =>
+          expectedQ = (sim.get(j), sim.get(k)) match {
             case (Some(true), Some(false)) => Some(true)
             case (Some(false), Some(true)) => Some(false)
             case (Some(true), Some(true)) => expectedQ.map(!_)
@@ -226,9 +213,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
         }
         .whenLow(clear) { _ => expectedQ = Some(false) }
-        .check { state =>
-          state.get(q) must beEqualTo(expectedQ)
-          state.get(nq) must beEqualTo(expectedQ.map(!_))
+        .check { sim =>
+          sim.get(q) must beEqualTo(expectedQ)
+          sim.get(nq) must beEqualTo(expectedQ.map(!_))
         }
         .run()
     }
@@ -239,32 +226,32 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
       val ins = newBus(n)
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(1000))
-      foreach(outs) { out => state.get(out) must beNone }
+      val sim = Sim.setupAndRun(comp, Some(1000))
+      foreach(outs) { out => sim.get(out) must beNone }
     }
 
     "remain unset while clk is Low" in forAll { (ins: Vector[LogicLevel]) =>
-      val (outs, state) = buildAndRun { register(ins, High, Low) }
-      foreach(outs) { out => state.get(out) must beNone }
+      val (outs, sim) = buildAndRun { register(ins, High, Low) }
+      foreach(outs) { out => sim.get(out) must beNone }
     }
 
     "remain unset while load is Low" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(1000))
-      foreach(outs) { out => state.get(out) must beNone }
+      val sim = Sim.setupAndRun(comp, Some(1000))
+      foreach(outs) { out => sim.get(out) must beNone }
     }
 
     "be set to the input on clock positive edge when load is High" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
-      val state = Sim.setupAndRun(comp, Some(250))
-      outs.map(state.get).sequence must beSome.which { bools =>
+      val sim = Sim.setupAndRun(comp, Some(250))
+      outs.map(sim.get).sequence must beSome.which { bools =>
         bools must beEqualTo(ins.map(_.toBool))
       }
     }
 
     "be set unconditionally to Low when clear is Low" in forAll { (ins: Vector[LogicLevel]) =>
-      val (outs, state) = buildAndRun { register(ins, Low, Low, clear = Low) }
-      outs.map(state.get).sequence must beSome(List.fill(ins.length)(false))
+      val (outs, sim) = buildAndRun { register(ins, Low, Low, clear = Low) }
+      outs.map(sim.get).sequence must beSome(List.fill(ins.length)(false))
     }
 
     "retain its original value outside positive edges or when load is Low" in {
@@ -272,9 +259,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val load = newPort()
       val (outs, comp) = buildComponent { register(ins, load, clock(100)) }
 
-      def setInputs(load0: Boolean, ins0: List[Boolean])(state: SimState) = {
-        val st0 = state.schedule(0, PortChange(load, Some(load0)))
-        ins.zip(ins0).foldLeft(st0) { case (st, (port, v)) => st.schedule(0, PortChange(port, Some(v))) }
+      def setInputs(load0: Boolean, ins0: List[Boolean])(sim: Sim) = {
+        val st0 = sim.set(load, load0)
+        ins.zip(ins0).foldLeft(st0) { case (st, (port, v)) => st.set(port, v) }
       }
 
       val val1 = List(true, false, false, true)
@@ -308,18 +295,18 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(load -> false, clk -> true, clear -> false, xs)
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
-          .onPosEdge(clk) { state =>
-            if (state.get(load) == Some(true)) {
+          .onPosEdge(clk) { sim =>
+            if (sim.get(load) == Some(true)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
-                state.get(x).orElse(curr)
+                sim.get(x).orElse(curr)
               }
             }
           }
           .whenLow(clear) { _ =>
             expectedOuts = Vector.fill(n)(Some(false))
           }
-          .check { state =>
-            outs.map(state.get) must beEqualTo(expectedOuts)
+          .check { sim =>
+            outs.map(sim.get) must beEqualTo(expectedOuts)
           }
           .run()
       }
@@ -333,16 +320,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val (outs, comp) = buildComponent { counter(2, High, clock(100), clear) }
       outs must haveLength(2)
 
-      def setClear(clr: Boolean)(state: SimState) =
-        state.schedule(0, PortChange(clear, Some(clr)))
-
-      def getOutAsInt(state: SimState): Option[Int] =
-        outs.map(state.get).sequence.map(_.toInt)
+      def getOutAsInt(sim: Sim): Option[Int] =
+        outs.map(sim.get).sequence.map(_.toInt)
 
       runPlan(
         comp,
-        0 -> setClear(false),
-        25 -> setClear(true),
+        0 -> { _.set(clear, false) },
+        25 -> { _.set(clear, true) },
         50 -> { st => getOutAsInt(st) must beSome(0) },
         125 -> { st => getOutAsInt(st) must beSome(1) },
         250 -> { st => getOutAsInt(st) must beSome(1) },
@@ -364,14 +348,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(count -> false, clk -> true, clear -> false)
           .onStart { _ => expectedOut = 0 }
-          .onNegEdge(clk) { state =>
-            if (state.get(count) == Some(true)) {
+          .onNegEdge(clk) { sim =>
+            if (sim.get(count) == Some(true)) {
               expectedOut = (expectedOut + 1) % (1 << n)
             }
           }
           .whenLow(clear) { _ => expectedOut = 0 }
-          .check { state =>
-            outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
+          .check { sim =>
+            outs.map(sim.get).sequence.map(_.toInt) must beSome(expectedOut)
           }
           .run()
       }
@@ -392,13 +376,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         SequentialScenario(comp)
           .withPorts(load -> false, clk -> true, clear -> false, ps -> false)
           .onStart { _ => expectedOut = 0 }
-          .onNegEdge(clk) { state =>
+          .onNegEdge(clk) { sim =>
             expectedOut = (expectedOut + 1) % (1 << n)
           }
-          .whenHigh(load) { state => expectedOut = ps.map(state.get).sequence.get.toInt }
+          .whenHigh(load) { sim => expectedOut = ps.map(sim.get).sequence.get.toInt }
           .whenLow(clear) { _ => expectedOut = 0 }
-          .check { state =>
-            outs.map(state.get).sequence.map(_.toInt) must beSome(expectedOut)
+          .check { sim =>
+            outs.map(sim.get).sequence.map(_.toInt) must beSome(expectedOut)
           }
           .run()
       }
@@ -420,9 +404,9 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .onStart { _ => expectedIdx = 0 }
           .onNegEdge(clk) { _ => expectedIdx = (expectedIdx + 1) % n }
           .whenLow(clear) { _ => expectedIdx = 0 }
-          .check { state =>
+          .check { sim =>
             foreach(outs.zipWithIndex) { case (out, idx) =>
-              state.get(out) must beSome(idx == expectedIdx)
+              sim.get(out) must beSome(idx == expectedIdx)
             }
           }
           .run()
@@ -442,15 +426,15 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         var mem: Array[Vector[Option[Boolean]]] = Array.fill(1 << addrN)(Vector.fill(inN)(None))
 
-        def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
+        def addrIdx(sim: Sim) = addr.map(sim.get).sequence.get.toInt
 
         SequentialScenario(comp)
           .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
           .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
-          .whenHigh(we) { state => mem(addrIdx(state)) = ins.map(state.get) }
-          .check { state =>
-            outs.map(state.get) must beEqualTo(
-              if (state.get(ce) == Some(true)) mem(addrIdx(state))
+          .whenHigh(we) { sim => mem(addrIdx(sim)) = ins.map(sim.get) }
+          .check { sim =>
+            outs.map(sim.get) must beEqualTo(
+              if (sim.get(ce) == Some(true)) mem(addrIdx(sim))
               else Vector.fill(inN)(None)
             )
           }
@@ -469,12 +453,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           val (outs, comp) = buildComponent { rom(data, addr) }
           outs must haveLength(data.head.length)
 
-          def addrIdx(state: SimState) = addr.map(state.get).sequence.get.toInt
+          def addrIdx(sim: Sim) = addr.map(sim.get).sequence.get.toInt
 
           SequentialScenario(comp)
             .withPorts(addr -> false)
-            .check { state =>
-              outs.map(state.get) must beEqualTo(data(addrIdx(state)).map(Some.apply))
+            .check { sim =>
+              outs.map(sim.get) must beEqualTo(data(addrIdx(sim)).map(Some.apply))
             }
             .run()
         }

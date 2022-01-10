@@ -9,7 +9,7 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
-import simulator.{Sim, SimState}
+import simulator.Sim
 
 abstract class BaseSpec extends Specification with ScalaCheck {
 
@@ -21,23 +21,23 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   // --- Utility methods ---
 
-  def buildAndRun[A](spec: Spec[A]): (A, SimState) = {
+  def buildAndRun[A](spec: Spec[A]): (A, Sim) = {
     val (res, comp) = buildComponent(spec)
     (res, Sim.setupAndRun(comp))
   }
 
-  def runPlan(comp: Component, plan: (Int, SimState => Result | SimState)*): Result = {
-    var state = Sim.setup(comp)
+  def runPlan(comp: Component, plan: (Int, Sim => Result | Sim)*): Result = {
+    var sim = Sim.setup(comp)
     foreach(plan.toList.sortBy(_._1)) { case (tick, f) =>
-      state = state.run(Some(tick))
-      f(state) match {
+      sim = sim.run(Some(tick))
+      f(sim) match {
         case r: Result => r.updateMessage(s"At t=$tick: " + _)
-        case st: SimState => state = st; ok
+        case sim1: Sim => sim = sim1; ok
       }
     }
   }
 
-  def foreachTick(comp: Component, maxTicks: Int)(f: (Int, SimState) => Result): Result = {
+  def foreachTick(comp: Component, maxTicks: Int)(f: (Int, Sim) => Result): Result = {
     runPlan(comp, (0 to maxTicks).map { tick => (tick, f(tick, _)) }: _*)
   }
 
