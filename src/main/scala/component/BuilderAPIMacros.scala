@@ -81,7 +81,8 @@ object BuilderAPIMacros {
 
   // ---------
 
-  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A])(using Quotes): Expr[Unit] = {
+  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A])(using qctx: Quotes): Expr[Unit] = {
+    import qctx.reflect._
     expr match {
       case '{ $port: Port } =>
         '{ $env.register(${ Expr(name) }, $port) }
@@ -95,8 +96,20 @@ object BuilderAPIMacros {
           ),
           '{}
         )
-      case _ =>
-        '{}
+      case '{ $obj: t } =>
+        Expr.block(
+          TypeRepr.of[t].typeSymbol.caseFields.map { sym =>
+            val (field, ttree) = sym.tree match {
+              case ValDef(field, ttree, _) => (field, ttree)
+              case DefDef(field, _, ttree, _) => (field, ttree)
+            }
+            ttree.tpe.asType match {
+              case '[t] => registerPorts(env, name + "_" + field, Select(obj.asTerm, sym).asExprOf[t])
+              case _ => '{}
+            }
+          },
+          '{}
+        )
     }
   }
 
