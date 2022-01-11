@@ -66,7 +66,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
           case (sim, _, _, _) => sim
         }
         .onPosEdge(clk) { sim =>
-          if (sim.get(load) == Some(true)) {
+          if (sim.isHigh(load)) {
             expectedReg = sim.get(ins)
           }
         }
@@ -75,8 +75,8 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         }
         .check { sim =>
           sim.get(bus.slice(0, 4)) aka "the bus" must beEqualTo(
-            if (sim.get(enable) == Some(true)) expectedReg.slice(0, 4)
-            else if (sim.get(load) == Some(true)) sim.get(ins.slice(0, 4))
+            if (sim.isHigh(enable)) expectedReg.slice(0, 4)
+            else if (sim.isHigh(load)) sim.get(ins.slice(0, 4))
             else Vector.fill(4)(None)
           )
           sim.get(instr) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))

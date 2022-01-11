@@ -150,7 +150,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         .withPorts(in, enable -> false)
         .check { sim =>
           sim.get(out) must beEqualTo(
-            if (sim.get(enable) == Some(true)) sim.get(in) else None
+            if (sim.isHigh(enable)) sim.get(in) else None
           )
         }
         .run()

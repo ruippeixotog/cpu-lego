@@ -39,6 +39,8 @@ final case class Sim(
     portValues(port).orElse(groupValues(c.groupOf(port)))
 
   inline def get(bus: Vector[Port]): Vector[Option[Boolean]] = bus.map(get)
+  inline def isLow(port: Port): Boolean = get(port) == Some(false)
+  inline def isHigh(port: Port): Boolean = get(port) == Some(true)
 
   def set(port: Port, newValue: Option[Boolean]): Sim =
     schedule(0, PortChange(port, newValue))

@@ -296,7 +296,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .withPorts(load -> false, clk -> true, clear -> false, xs)
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { sim =>
-            if (sim.get(load) == Some(true)) {
+            if (sim.isHigh(load)) {
               expectedOuts = xs.zip(expectedOuts).map { case (x, curr) =>
                 sim.get(x).orElse(curr)
               }
@@ -349,7 +349,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .withPorts(count -> false, clk -> true, clear -> false)
           .onStart { _ => expectedOut = 0 }
           .onNegEdge(clk) { sim =>
-            if (sim.get(count) == Some(true)) {
+            if (sim.isHigh(count)) {
               expectedOut = (expectedOut + 1) % (1 << n)
             }
           }
@@ -434,7 +434,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .whenHigh(we) { sim => mem(addrIdx(sim)) = sim.get(ins) }
           .check { sim =>
             sim.get(outs) must beEqualTo(
-              if (sim.get(ce) == Some(true)) mem(addrIdx(sim))
+              if (sim.isHigh(ce)) mem(addrIdx(sim))
               else Vector.fill(inN)(None)
             )
           }

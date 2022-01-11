@@ -47,11 +47,11 @@ trait SequentialScenarios { this: Specification with ScalaCheck =>
       case _ => // do nothing
     }
     def whenHigh(port: Port)(f: Sim => Unit) = onAction {
-      case (sim, _, _, _) if sim.get(port) == Some(true) => f(sim)
+      case (sim, _, _, _) if sim.isHigh(port) => f(sim)
       case _ => // do nothing
     }
     def whenLow(port: Port)(f: Sim => Unit) = onAction {
-      case (sim, _, _, _) if sim.get(port) == Some(false) => f(sim)
+      case (sim, _, _, _) if sim.isLow(port) => f(sim)
       case _ => // do nothing
     }
 
