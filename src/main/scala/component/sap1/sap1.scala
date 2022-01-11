@@ -20,7 +20,7 @@ object ControlBus {
     bits.foldLeft(Vector.fill(12)(false)) { (vec, b) => vec.updated(b.ordinal, true) }
 }
 
-def sap1(clk: Port, clr: Port, ramInput: Input): Spec[(Port, Bus)] = newSpec {
+def sap1(clk: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
@@ -31,8 +31,8 @@ def sap1(clk: Port, clr: Port, ramInput: Input): Spec[(Port, Bus)] = newSpec {
 
   progCounter(bus, con(Cp), not(clk), clr, con(Ep))
 
-  val mOut = register(bus.take(4), con(Lm), clk)
-  ram(bus, mOut, con(Ce), ramInput)
+  val mOut = inputAndMar(bus.take(4), con(Lm), ramIn, clk)
+  ram(bus, mOut, con(Ce), ramIn)
 
   val aOut = accumulator(bus, clk, con(La), con(Ea))
   val bOut = register(bus, con(Lb), clk)
@@ -81,13 +81,13 @@ def progCounter(bus: Bus, count: Port, clk: Port, clr: Port, enable: Port): Spec
   buffered(enable)(counter(4, count, clk, clr)) ~> bus.take(4)
 }
 
-def inputAndMar(bus: Bus, load: Port, sapIn: Input, clk: Port): Spec[Bus] = newSpec {
+def inputAndMar(bus: Bus, load: Port, ramIn: Input, clk: Port): Spec[Bus] = newSpec {
   val mOut = register(bus.take(4), load, clk)
-  mOut.zip(sapIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(sapIn.prog)) }
+  mOut.zip(ramIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(ramIn.prog)) }
 }
 
-def ram(bus: Bus, addr: Bus, ce: Port, sapIn: Input): Spec[Unit] = newSpec {
-  component.ram(sapIn.data, addr, sapIn.write, and(ce, not(sapIn.prog))) ~> bus
+def ram(bus: Bus, addr: Bus, ce: Port, ramIn: Input): Spec[Unit] = newSpec {
+  component.ram(ramIn.data, addr, ramIn.write, and(ce, not(ramIn.prog))) ~> bus
 }
 
 def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newSpec {

@@ -84,4 +84,58 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         .run()
     }
   }
+
+  "An input, MAR and RAM" should {
+
+    "work as intended" in {
+      val ins, addrIn = newBus(4)
+      val bus, dataIn = newBus(8)
+      val prog, write, load, clk, enable = newPort()
+      val ramIn = Input(prog, write, addrIn, dataIn)
+
+      val (_, comp) = buildComponent {
+        buffered(load)(ins) ~> bus.take(4)
+        val mOut = inputAndMar(bus.take(4), load, ramIn, clk)
+        sap1.ram(bus, mOut, enable, ramIn)
+      }
+
+      var mem: Array[Vector[Option[Boolean]]] = Array.fill(16)(Vector.fill(8)(None))
+      var addrReg: Vector[Option[Boolean]] = Vector.fill(4)(None)
+
+      SequentialScenario(comp)
+        .withPorts(prog -> true, write -> false, addrIn -> false, dataIn -> false)
+        .withPorts(ins -> false, load -> true, clk -> true, enable -> false)
+        .onStart { _ =>
+          mem = Array.fill(16)(Vector.fill(8)(None))
+          addrReg = Vector.fill(4)(None)
+        }
+        .beforeAction {
+          // ensure `enable` and `load` are not High at the same time
+          case (sim, `enable`, true, _) => sim.set(load, false)
+          case (sim, `load`, true, _) => sim.set(enable, false)
+          case (sim, _, _, _) => sim
+        }
+        .onPosEdge(clk) { sim =>
+          if (sim.isHigh(load)) {
+            addrReg = sim.get(bus.take(4))
+          }
+        }
+        .whenHigh(write) { sim =>
+          val addr = if (sim.isHigh(prog)) sim.get(addrIn) else addrReg
+          addr.sequence.foreach { addr0 =>
+            mem(addr0.toInt) = sim.get(dataIn)
+          }
+        }
+        .check { sim =>
+          if (sim.isHigh(enable) && sim.isLow(prog)) {
+            addrReg.sequence match {
+              case Some(addr) => sim.get(bus) must beEqualTo(mem(addr.toInt))
+              case None => sim.get(bus) must beEqualTo(Vector.fill(8)(None))
+            }
+          }
+          ok
+        }
+        .run()
+    }
+  }
 }
