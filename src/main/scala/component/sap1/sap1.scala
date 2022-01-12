@@ -20,11 +20,12 @@ object ControlBus {
     bits.foldLeft(Vector.fill(12)(false)) { (vec, b) => vec.updated(b.ordinal, true) }
 }
 
-def sap1(clk: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
+def sap1(clkSig: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
   val hlt = multi(and)(instr: _*)
+  val clk = clock(clkSig, clr, hlt)
   val con = sequencer(instr, clk, clr)
 
   instrRegister(bus, con(Li), clk, clr, con(Ei)) ~> instr
@@ -40,6 +41,10 @@ def sap1(clk: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
 
   val oOut = register(bus, con(Lo), clk)
   (hlt, oOut)
+}
+
+def clock(clkSig: Port, clr: Port, hlt: Port): Spec[Port] = newSpec {
+  jkFlipFlop(not(hlt), not(hlt), clkSig, clr)._1
 }
 
 def sequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
