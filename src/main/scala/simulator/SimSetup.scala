@@ -3,16 +3,15 @@ package simulator
 import core._
 
 object SimSetup {
-  val GateDelay = 1
-  val PosEdgeDelay = 1
 
   def setup(c: Circuit): Sim = {
     val sim = Sim(c).set(High, true).set(Low, false)
+    import sim.conf._
 
     c.components.foldLeft(sim) {
 
       case (sim, NAND(in1, in2, out)) =>
-        binaryOp(sim, in1, in2, out, GateDelay) {
+        binaryOp(sim, in1, in2, out, gateDelay) {
           case (Some(false), _) => Some(true)
           case (_, Some(false)) => Some(true)
           case (Some(true), Some(true)) => Some(false)
@@ -27,7 +26,7 @@ object SimSetup {
             case _ => None
           }
           res.fold(s) { v =>
-            s.setAfter(GateDelay, q, v).setAfter(GateDelay, nq, !v)
+            s.setAfter(gateDelay, q, v).setAfter(gateDelay, nq, !v)
           }
         }
         sim.watch(set)(propagate).watch(reset)(propagate)
@@ -41,7 +40,8 @@ object SimSetup {
           .watch(in) { st =>
             st.get(in) match {
               case Some(true) =>
-                st.setAfter(GateDelay, out, true).setAfter(GateDelay + PosEdgeDelay, out, false)
+                st.setAfter(gateDelay, out, true)
+                  .setAfter(gateDelay + posEdgeDuration, out, false)
               case _ =>
                 st
             }

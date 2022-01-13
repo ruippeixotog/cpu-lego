@@ -9,8 +9,6 @@ import util.UnionFind
 import Sim.Event._
 
 object Sim {
-  val WireDelay = 1
-  val SCTolerance = 5
 
   enum Event {
     case PortChange(port: Port, value: Option[Boolean])
@@ -27,15 +25,18 @@ object Sim {
 
 final case class Sim(
     c: Circuit,
-    t: Long = 0,
-    events: TreeMap[Long, Vector[Sim.Event]] = TreeMap(),
-    portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
-    portObservers: Map[Port, List[Sim => Sim]] = Map().withDefaultValue(Nil),
-    groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
+    conf: Config = Config.default,
+    private val t: Long = 0,
+    private val events: TreeMap[Long, Vector[Sim.Event]] = TreeMap(),
+    private val portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
+    private val portObservers: Map[Port, List[Sim => Sim]] = Map().withDefaultValue(Nil),
+    private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
 ) {
 
   private def schedule(after: Long, ev: Sim.Event): Sim =
     copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
+
+  inline def tick = t
 
   def get(port: Port): Option[Boolean] =
     portValues(port).orElse(groupValues(c.groupOf(port)))
@@ -90,7 +91,7 @@ final case class Sim(
       else {
         copy(portValues = portValues + ((port, newValue)))
           .runObservers(port)
-          .schedule(Sim.WireDelay, PortGroupDrive(c.groupOf(port)))
+          .schedule(conf.wireDelay, PortGroupDrive(c.groupOf(port)))
       }
 
     case PortGroupDrive(group) =>
@@ -99,7 +100,7 @@ final case class Sim(
         case v :: Nil => (this, Some(v))
         case vs =>
           (
-            schedule(Sim.SCTolerance, PortGroupCheck(group)),
+            schedule(conf.scTolerance, PortGroupCheck(group)),
             vs.distinct match {
               case v :: Nil => Some(v)
               case _ => None
