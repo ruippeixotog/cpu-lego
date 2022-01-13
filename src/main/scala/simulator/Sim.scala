@@ -10,10 +10,12 @@ import Sim.Event._
 
 object Sim {
   val WireDelay = 1
+  val SCTolerance = 5
 
   enum Event {
     case PortChange(port: Port, value: Option[Boolean])
     case PortGroupDrive(group: PortGroup)
+    case PortGroupCheck(group: PortGroup)
   }
 
   inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): Sim =
@@ -74,41 +76,61 @@ final case class Sim(
     val sortedEvs = evs.sortBy {
       case PortGroupDrive(_) => 1
       case PortChange(_, _) => 2
+      case PortGroupCheck(_) => 3
     }
+    Some(copy(t = t1, events = events.tail).processEvents(sortedEvs))
+  }
 
-    val next = sortedEvs.foldLeft(copy(t = t1, events = events.tail)) { case (st, ev) =>
-      // println(s"t=$t1: $ev")
-      ev match {
-        case PortChange(port, newValue) =>
-          if (newValue == st.portValues(port)) st
-          else {
-            st.portObservers(port)
-              .foldLeft(st.copy(portValues = st.portValues + ((port, newValue)))) { (st, f) => f(st) }
-              .schedule(Sim.WireDelay, PortGroupDrive(st.c.groupOf(port)))
-          }
+  private def processEvents(evs: Seq[Sim.Event]): Sim =
+    evs.foldLeft(this)(_.processEvent(_))
 
-        case PortGroupDrive(group) =>
-          val groupPorts = st.c.portsOf(group).toList
-          val newValue = groupPorts.map(st.portValues).flatten match {
-            case Nil => None
-            case v :: Nil => Some(v)
-            case vs =>
-              vs.distinct match {
-                case v :: Nil =>
-                  println("WARNING")
-                  Some(v)
-                case _ =>
-                  throw new Exception("PUM")
-              }
-          }
-          if (newValue == st.groupValues(group)) st
-          else {
-            groupPorts.foldLeft(st.copy(groupValues = st.groupValues + ((group, newValue)))) { case (st, p) =>
-              st.portObservers(p).foldLeft(st) { case (st2, f) => f(st2) }
+  private def processEvent(ev: Sim.Event): Sim = ev match {
+    case PortChange(port, newValue) =>
+      if (newValue == portValues(port)) this
+      else {
+        copy(portValues = portValues + ((port, newValue)))
+          .runObservers(port)
+          .schedule(Sim.WireDelay, PortGroupDrive(c.groupOf(port)))
+      }
+
+    case PortGroupDrive(group) =>
+      val (sim1, newValue) = groupDrivenValues(group) match {
+        case Nil => (this, None)
+        case v :: Nil => (this, Some(v))
+        case vs =>
+          (
+            schedule(Sim.SCTolerance, PortGroupCheck(group)),
+            vs.distinct match {
+              case v :: Nil => Some(v)
+              case _ => None
             }
+          )
+      }
+      if (newValue == sim1.groupValues(group)) sim1
+      else {
+        sim1
+          .copy(groupValues = sim1.groupValues + ((group, newValue)))
+          .runObservers(group)
+      }
+
+    case PortGroupCheck(group) =>
+      val newValue = groupDrivenValues(group) match {
+        case Nil | List(_) => // everything's fine
+        case vs =>
+          vs.distinct match {
+            case List(v) => println("WARNING")
+            case _ => throw new Exception("PUM")
           }
       }
-    }
-    Some(next)
+      this
   }
+
+  private def groupDrivenValues(group: PortGroup): List[Boolean] =
+    c.portsOf(group).toList.map(portValues).flatten
+
+  private def runObservers(group: PortGroup): Sim =
+    c.portsOf(group).foldLeft(this)(_.runObservers(_))
+
+  private def runObservers(port: Port): Sim =
+    portObservers(port).foldLeft(this) { (sim1, f) => f(sim1) }
 }
