@@ -6,6 +6,7 @@ import component.sap1.ControlBus.Bit._
 import core._
 import org.specs2.specification.core.Fragment
 import testkit._
+import util.Implicits._
 
 class Sap1Spec extends BaseSpec with SequentialScenarios {
 

@@ -10,6 +10,7 @@ import org.specs2.ScalaCheck
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
 import simulator.Sim
+import util.Implicits._
 
 abstract class BaseSpec extends Specification with ScalaCheck {
 
@@ -43,35 +44,25 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   // --- Extension methods ---
 
-  extension [A](self: Seq[Option[A]]) {
-    def sequence: Option[Seq[A]] =
-      self.foldRight[Option[List[A]]](Some(Nil)) { case (x, acc) => x.zip(acc).map(_ :: _) }
-  }
+  // extension (self: LogicLevel) {
+  //   def toBool: Boolean = self match {
+  //     case High => true
+  //     case Low => false
+  //   }
 
-  extension (self: LogicLevel) {
-    def toBool: Boolean = self match {
-      case High => true
-      case Low => false
-    }
+  //   def toInt: Int = self match {
+  //     case High => 1
+  //     case Low => 0
+  //   }
+  // }
 
-    def toInt: Int = self match {
-      case High => 1
-      case Low => 0
-    }
-  }
+  // extension (self: Option[LogicLevel]) {
+  //   def toPort: Port = self.getOrElse(new Port)
+  // }
 
-  extension (self: Option[LogicLevel]) {
-    def toPort: Port = self.getOrElse(new Port)
-  }
-
-  extension (self: Seq[LogicLevel]) {
-    def toInt: Int = self.map(_.toBool).toInt
-  }
-
-  extension (self: Seq[Boolean]) {
-    @targetName("boolSeqToUInt")
-    def toInt: Int = self.zipWithIndex.filter(_._1).foldLeft(0)((acc, i) => acc | (1 << i._2))
-  }
+  // extension (self: Seq[LogicLevel]) {
+  //   def toInt: Int = util.Implicits.toInt(self.map(_.toBool))
+  // }
 
   extension (self: Int) {
     def truncate(n: Int): Int = self & (1 << n - 1)

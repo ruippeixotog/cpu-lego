@@ -9,6 +9,7 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Circuit, Sim, SimSetup}
 import testkit._
+import util.Implicits._
 
 class CoreSpec extends BaseSpec with SequentialScenarios {
 

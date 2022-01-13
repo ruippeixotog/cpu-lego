@@ -6,6 +6,7 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import simulator.Sim
 import testkit._
+import util.Implicits._
 
 class MemorySpec extends BaseSpec with SequentialScenarios {
 

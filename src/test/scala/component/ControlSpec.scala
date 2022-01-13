@@ -5,6 +5,7 @@ import core._
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import testkit._
+import util.Implicits._
 
 class ControlSpec extends BaseSpec {
 
