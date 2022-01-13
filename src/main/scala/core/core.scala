@@ -6,6 +6,8 @@ sealed trait LogicLevel extends Port
 case object High extends LogicLevel
 case object Low extends LogicLevel
 
+type Bus = Vector[Port]
+
 sealed trait Component
 sealed trait BaseComponent extends Component
 
@@ -19,5 +21,5 @@ case class CompositeComponent(
     name: String,
     components: Map[String, Component],
     wires: List[(Port, Port)],
-    namedPorts: Map[String, Port | Vector[Port]]
+    namedPorts: Map[String, Port | Bus]
 ) extends Component

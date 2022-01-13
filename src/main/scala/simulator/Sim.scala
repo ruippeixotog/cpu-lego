@@ -41,7 +41,7 @@ final case class Sim(
   def get(port: Port): Option[Boolean] =
     portValues(port).orElse(groupValues(c.groupOf(port)))
 
-  inline def get(bus: Vector[Port]): Vector[Option[Boolean]] = bus.map(get)
+  inline def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get)
   inline def isLow(port: Port): Boolean = get(port) == Some(false)
   inline def isHigh(port: Port): Boolean = get(port) == Some(true)
 
@@ -51,6 +51,9 @@ final case class Sim(
   inline def set(port: Port, newValue: Boolean): Sim = set(port, Some(newValue))
   inline def unset(port: Port): Sim = set(port, None)
   inline def toggle(port: Port): Sim = set(port, get(port).map(!_))
+
+  def set(bus: Bus, newValue: Seq[Boolean]): Sim =
+    bus.zip(newValue).foldLeft(this) { case (sim1, (p, v)) => sim1.set(p, v) }
 
   def setAfter(after: Long, port: Port, newValue: Option[Boolean]): Sim =
     schedule(after, PortChange(port, newValue))
