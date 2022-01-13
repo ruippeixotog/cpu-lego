@@ -52,12 +52,12 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         instrRegister(bus, load, clk, clr, enable)
       }
 
-      var expectedReg = Vector.fill(4)(None) ++ Vector.fill(4)(Some(false))
+      var expectedReg = Vector.fill(4)(Some(false)) ++ Vector.fill(4)(None)
 
       SequentialScenario(comp)
         .withPorts(load -> false, clk -> true, clr -> false, enable -> true, ins -> false)
         .onStart { _ =>
-          expectedReg = Vector.fill(4)(None) ++ Vector.fill(4)(Some(false))
+          expectedReg = Vector.fill(4)(Some(false)) ++ Vector.fill(4)(None)
         }
         .beforeAction {
           // ensure `enable` and `load` are not High at the same time
@@ -71,15 +71,15 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
           }
         }
         .whenLow(clr) { _ =>
-          expectedReg = expectedReg.slice(0, 4) ++ Vector.fill(4)(Some(false))
+          expectedReg = Vector.fill(4)(Some(false)) ++ expectedReg.drop(4)
         }
         .check { sim =>
-          sim.get(bus.slice(0, 4)) aka "the bus" must beEqualTo(
-            if (sim.isHigh(enable)) expectedReg.slice(0, 4)
-            else if (sim.isHigh(load)) sim.get(ins.slice(0, 4))
+          sim.get(bus.drop(4)) aka "the bus" must beEqualTo(
+            if (sim.isHigh(enable)) expectedReg.drop(4)
+            else if (sim.isHigh(load)) sim.get(ins.drop(4))
             else Vector.fill(4)(None)
           )
-          sim.get(instr) aka "the instruction" must beEqualTo(expectedReg.slice(4, 8))
+          sim.get(instr) aka "the instruction" must beEqualTo(expectedReg.take(4))
         }
         .run()
     }
@@ -94,8 +94,8 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       val ramIn = Input(prog, write, addrIn, dataIn)
 
       val (_, comp) = buildComponent {
-        buffered(load)(ins) ~> bus.take(4)
-        val mOut = inputAndMar(bus.take(4), load, ramIn, clk)
+        buffered(load)(ins) ~> bus.drop(4)
+        val mOut = inputAndMar(bus, load, ramIn, clk)
         sap1.ram(bus, mOut, enable, ramIn)
       }
 
@@ -117,7 +117,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
         }
         .onPosEdge(clk) { sim =>
           if (sim.isHigh(load)) {
-            addrReg = sim.get(bus.take(4))
+            addrReg = sim.get(bus.drop(4))
           }
         }
         .whenHigh(write) { sim =>

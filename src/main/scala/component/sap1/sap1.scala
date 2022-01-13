@@ -32,7 +32,7 @@ def sap1(clkSig: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
 
   progCounter(bus, con(Cp), not(clk), clr, con(Ep))
 
-  val mOut = inputAndMar(bus.take(4), con(Lm), ramIn, clk)
+  val mOut = inputAndMar(bus, con(Lm), ramIn, clk)
   ram(bus, mOut, con(Ce), ramIn)
 
   val aOut = accumulator(bus, clk, con(La), con(Ea))
@@ -78,16 +78,16 @@ def microprogSequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = new
 
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
   val (bus0, bus1) = bus.splitAt(4)
-  buffered(enable)(register(bus0, load, clk)) ~> bus0
-  register(bus1, load, clk, clr)
+  buffered(enable)(register(bus1, load, clk)) ~> bus1
+  register(bus0, load, clk, clr)
 }
 
 def progCounter(bus: Bus, count: Port, clk: Port, clr: Port, enable: Port): Spec[Unit] = newSpec {
-  buffered(enable)(counter(4, count, clk, clr)) ~> bus.take(4)
+  buffered(enable)(counter(4, count, clk, clr)) ~> bus.drop(4)
 }
 
 def inputAndMar(bus: Bus, load: Port, ramIn: Input, clk: Port): Spec[Bus] = newSpec {
-  val mOut = register(bus.take(4), load, clk)
+  val mOut = register(bus.drop(4), load, clk)
   mOut.zip(ramIn.addr).map { case (out, a) => mux(Vector(out, a), Vector(ramIn.prog)) }
 }
 
