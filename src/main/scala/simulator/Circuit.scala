@@ -16,9 +16,11 @@ case class Circuit(components: List[BaseComponent], wires: List[(Port, Port)]) {
 }
 
 object Circuit {
+
   def apply(root: Component, extraWires: List[(Port, Port)] = Nil): Circuit = {
     root match {
-      case comp: BaseComponent => Circuit(List(comp), extraWires)
+      case comp: BaseComponent =>
+        Circuit(List(comp), extraWires)
       case comp: CompositeComponent =>
         comp.components.values.map(apply(_)).fold(Circuit(Nil, extraWires ++ comp.wires)) { (c1, c2) =>
           Circuit(c1.components ++ c2.components, c1.wires ++ c2.wires)
