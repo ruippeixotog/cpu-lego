@@ -5,6 +5,7 @@ import component.sap1._
 import computer.sap1.Instr._
 import core._
 import simulator.{Index, Sim}
+import util.Formatter
 import util.Implicits._
 
 case class SAP1(prog: List[MemEntry]) {
@@ -24,34 +25,28 @@ case class SAP1(prog: List[MemEntry]) {
   def setup: Sim =
     Sim.setup(comp).set(clkSig, false).set(clr, false).run().set(clr, true).run()
 
-  def printBus(sim: Sim, name: String, path: String, fmt: String = "%b"): Unit = {
-    println(s"${name}: ${sim.get(index.buses(path)).render(fmt)}")
-  }
-
   def printState(sim: Sim): Unit = {
-    val clk = index.ports("sap1.clock.out")
-    val tRing = index.buses("sap1.sequencer.ringCounter.out")
-    val tState = sim.get(tRing).indexOf(Some(true)) + 1
+    val fmt = Formatter(sim, index) {
+      case ("r", v) => v.indexOf(Some(true)) + 1
+      case ("ins", v) => v.sequence.flatMap(Instr.apply).getOrElse("x")
+    }
 
-    val ram = index.buses("sap1.ram.ram.buffered.xs")
-    val ramContent = sim.get(ram)
-    val ramInstr = " / " + sim.get(ram).sequence.flatMap(Instr.apply).getOrElse("x")
-
-    println(s"---- t=${sim.tick} clk=${sim.get(clk).get} hlt=${sim.get(hlt).get} ----")
-    println(s"t: ${tState}")
-    printBus(sim, "instr", "sap1.instr")
-    printBus(sim, "con", "sap1.sequencer.out_con")
-    printBus(sim, "bus", "sap1.bus")
-    println()
-    printBus(sim, "pc", "sap1.progCounter.counter.out")
-    printBus(sim, "ir", "sap1.instrRegister.register.out", "%b (%u)")
-    printBus(sim, "ar", "sap1.accumulator.register.out", "%b (%i)")
-    printBus(sim, "br", "sap1.register.out", "%b (%i)")
-    printBus(sim, "mr", "sap1.inputAndMar.register.out", "%b (%u)")
-    println(s"ram: ${ramContent.render}${ramInstr}")
-    printBus(sim, "out", "sap1.out2", "%b (%i)")
-    println(s"----")
-    println()
+    fmt.print(s"""
+      |---- t=${sim.tick} clk=%b{sap1.clock.out} hlt=%b{sap1.out1} ----
+      |t: %r{sap1.sequencer.ringCounter.out}
+      |instr: %b{sap1.instr}
+      |con: %b{sap1.sequencer.out_con}
+      |bus: %b{sap1.bus}
+      |
+      |pc: %b{sap1.progCounter.counter.out}
+      |ir: %b{sap1.instrRegister.register.out} (%u{*})
+      |ar: %b{sap1.accumulator.register.out} (%i{*})
+      |br: %b{sap1.register.out} (%i{*})
+      |mr: %b{sap1.inputAndMar.register.out} (%u{*})
+      |ram: %b{sap1.ram.ram.buffered.xs} / %ins{*}
+      |out: %b{sap1.out2} (%i{*})
+      |----
+    """.stripMargin)
   }
 
   def run: Sim = {
