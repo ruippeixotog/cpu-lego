@@ -54,4 +54,8 @@ object Implicits {
   extension (self: Int) {
     def toBoolVec(n: Int): Seq[Boolean] = (0 until n).map(i => (self & (1 << i)) != 0)
   }
+
+  extension (sc: StringContext) {
+    def b = new BinaryInterpolator(sc)
+  }
 }
