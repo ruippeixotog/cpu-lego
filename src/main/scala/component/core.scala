@@ -25,13 +25,6 @@ def clock(freq: Int): Spec[Port] = newSpec {
   out
 }
 
-def posEdge(_in: Port): Spec[Port] = newSpec {
-  val in, out = newPort()
-  summon[BuilderEnv].add("impl", PosEdge(in, out))
-  _in ~> in
-  out
-}
-
 def switch(_in: Port, _enable: Port): Spec[Port] = newSpec {
   val in, out, enable = newPort()
   summon[BuilderEnv].add("impl", Switch(in, out, enable))

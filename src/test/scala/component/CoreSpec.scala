@@ -117,25 +117,6 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
     }
   }
 
-  "A PosEdge" should {
-
-    "output Low when unchanged" in forAll { (in: LogicLevel) =>
-      val (out, sim) = buildAndRun { posEdge(in) }
-      sim.get(out) must beSome(false)
-    }
-
-    "output High when the input changes from Low to High" in {
-      val (out, comp) = buildComponent { posEdge(clock(50)) }
-      // expected delay from clock out to posEdge out
-
-      foreachTick(comp, 250) { (tick, sim) =>
-        // Positive edge triggering for clock(50) occurs at t=0,100,200...
-        val delay = sim.conf.wireDelay + sim.conf.gateDelay
-        sim.get(out) must beSome((tick - delay + 100) % 100 < sim.conf.posEdgeDuration)
-      }
-    }
-  }
-
   "A Switch" should {
 
     "behave as a controlled switch" in forAll { (in: Option[LogicLevel], enable: LogicLevel) =>

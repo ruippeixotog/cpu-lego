@@ -16,6 +16,46 @@ class ControlSpec extends BaseSpec {
     } yield xs.toVector
   )
 
+  "A posEdge" should {
+
+    "output Low when unchanged" in forAll { (in: LogicLevel) =>
+      val (out, sim) = buildAndRun { posEdge(in) }
+      sim.get(out) must beSome(false)
+    }
+
+    "output High when the input changes from Low to High" in {
+      val (out, comp) = buildComponent { posEdge(clock(50)) }
+
+      foreachTick(comp, 25, 250) { (tick, sim) =>
+        // Positive edge triggering for clock(50) occurs at t=0,100,200...
+        // implementation-specific check - two NAND gates used
+        val delay = sim.conf.wireDelay * 2 + sim.conf.gateDelay * 2
+        val duration = 2
+        sim.get(out) must beSome((tick - delay + 100) % 100 < duration)
+      }
+    }
+  }
+
+  "A negEdge" should {
+
+    "output Low when unchanged" in forAll { (in: LogicLevel) =>
+      val (out, sim) = buildAndRun { negEdge(in) }
+      sim.get(out) must beSome(false)
+    }
+
+    "output High when the input changes from High to Low" in {
+      val (out, comp) = buildComponent { negEdge(clock(50)) }
+
+      foreachTick(comp, 25, 250) { (tick, sim) =>
+        // Negative edge triggering for clock(50) occurs at t=50,150...
+        // implementation-specific check - three NAND gates used
+        val delay = sim.conf.wireDelay * 3 + sim.conf.gateDelay * 3
+        val duration = 2
+        sim.get(out) must beSome((tick - 50 - delay + 100) % 100 < duration)
+      }
+    }
+  }
+
   "A decoder" should {
 
     "select a single output based on the combination of inputs" in {

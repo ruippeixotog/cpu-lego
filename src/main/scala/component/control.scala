@@ -3,8 +3,12 @@ package component
 import component.BuilderAPI._
 import core._
 
+def posEdge(in: Port): Spec[Port] = newSpec {
+  and(in, not(in))
+}
+
 def negEdge(in: Port): Spec[Port] = newSpec {
-  posEdge(not(in))
+  and(not(in), not(not(in)))
 }
 
 /** An `ins.length` to 2^`ins.length` decoder.

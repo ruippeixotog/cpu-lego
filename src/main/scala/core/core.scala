@@ -14,7 +14,6 @@ sealed trait BaseComponent extends Component
 case class NAND(in1: Port, in2: Port, out: Port) extends BaseComponent
 case class FlipFlop(set: Port, reset: Port, q: Port, nq: Port) extends BaseComponent
 case class Clock(freq: Int, out: Port) extends BaseComponent
-case class PosEdge(in: Port, out: Port) extends BaseComponent
 case class Switch(in: Port, out: Port, enable: Port) extends BaseComponent
 
 case class CompositeComponent(

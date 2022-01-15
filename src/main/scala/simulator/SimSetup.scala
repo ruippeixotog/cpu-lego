@@ -34,19 +34,6 @@ object SimSetup {
       case (sim, Clock(freq, out)) =>
         sim.set(out, true).watch(out)(_.toggleAfter(freq, out))
 
-      case (sim, PosEdge(in, out)) =>
-        sim
-          .set(out, false)
-          .watch(in) { st =>
-            st.get(in) match {
-              case Some(true) =>
-                st.setAfter(gateDelay, out, true)
-                  .setAfter(gateDelay + posEdgeDuration, out, false)
-              case _ =>
-                st
-            }
-          }
-
       case (sim, Switch(in, out, enable)) =>
         binaryOp(sim, enable, in, out, 0) {
           case (Some(true), v) => v

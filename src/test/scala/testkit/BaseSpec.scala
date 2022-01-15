@@ -38,31 +38,11 @@ abstract class BaseSpec extends Specification with ScalaCheck {
     }
   }
 
-  def foreachTick(comp: Component, maxTicks: Int)(f: (Int, Sim) => Result): Result = {
-    runPlan(comp, (0 to maxTicks).map { tick => (tick, f(tick, _)) }: _*)
+  def foreachTick(comp: Component, fromTick: Int, toTick: Int)(f: (Int, Sim) => Result): Result = {
+    runPlan(comp, (fromTick to toTick).map { tick => (tick, f(tick, _)) }: _*)
   }
 
   // --- Extension methods ---
-
-  // extension (self: LogicLevel) {
-  //   def toBool: Boolean = self match {
-  //     case High => true
-  //     case Low => false
-  //   }
-
-  //   def toInt: Int = self match {
-  //     case High => 1
-  //     case Low => 0
-  //   }
-  // }
-
-  // extension (self: Option[LogicLevel]) {
-  //   def toPort: Port = self.getOrElse(new Port)
-  // }
-
-  // extension (self: Seq[LogicLevel]) {
-  //   def toInt: Int = util.Implicits.toInt(self.map(_.toBool))
-  // }
 
   extension (self: Int) {
     def truncate(n: Int): Int = self & (1 << n - 1)
