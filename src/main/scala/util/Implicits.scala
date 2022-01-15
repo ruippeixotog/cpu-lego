@@ -34,7 +34,9 @@ object Implicits {
     @targetName("seqBoolToInt")
     def toInt: Int = self.zipWithIndex.filter(_._1).foldLeft(0)((acc, i) => acc | (1 << i._2))
 
-    def toSignedInt: Int = if (self.last) -self.init.toInt - 1 else self.init.toInt
+    def toSignedInt: Int =
+      if (self.last) -self.init.map(!_).toInt - 1
+      else self.init.toInt
   }
 
   extension (self: Seq[Option[Boolean]]) {

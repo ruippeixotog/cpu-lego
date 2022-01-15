@@ -8,7 +8,7 @@ import simulator.{Index, Sim}
 import util.Formatter
 import util.Implicits._
 
-case class SAP1(prog: List[MemEntry]) {
+case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   val ramIn = {
     val prog, write = newPort()
@@ -51,7 +51,7 @@ case class SAP1(prog: List[MemEntry]) {
 
   def run: Sim = {
     def loop(sim: Sim): Sim = {
-      printState(sim)
+      if (debug) printState(sim)
       if (sim.get(hlt) == Some(true)) sim
       else loop(sim.toggle(clkSig).run().toggle(clkSig).run())
     }
@@ -59,7 +59,7 @@ case class SAP1(prog: List[MemEntry]) {
   }
 }
 
-object SAP1 extends App {
+object SAP1App extends App {
 
   // 10 + 14 + 18 - 20 = 22
   val prog: List[MemEntry] = List(
@@ -78,6 +78,6 @@ object SAP1 extends App {
     Data(20)
   )
 
-  val sap1 = SAP1(prog)
+  val sap1 = SAP1(prog, debug = true)
   println(sap1.run.get(sap1.out).render("out: %i"))
 }
