@@ -35,7 +35,7 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
       |---- t=${sim.tick} clk=%b{sap1.clock.out} hlt=%b{sap1.out1} ----
       |t: %r{sap1.sequencer.ringCounter.out}
       |instr: %b{sap1.instr}
-      |con: %b{sap1.sequencer.out_con}
+      |con: %b{sap1.sequencer.out_con[0,4]} %b{*[4,8]} %b{*[8,12]}
       |bus: %b{sap1.bus}
       |
       |pc: %b{sap1.progCounter.counter.out}

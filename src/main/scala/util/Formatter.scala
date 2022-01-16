@@ -6,7 +6,7 @@ import util.Implicits._
 case class Formatter(sim: Sim, index: Index)(
     renderer: PartialFunction[(String, Vector[Option[Boolean]]), Any] = (spec, _) => {}
 ) {
-  final val patt = raw"(?s)([^%]*)%([0-9a-z]+)\{([^}]+)\}(.*)".r
+  final val patt = raw"(?s)([^%]*)%([0-9a-z]+)\{([^}\[]+)(?:\[(\d+),(\d+)\])?\}(.*)".r
 
   def print(fmt: String): Unit =
     println(format(fmt))
@@ -15,8 +15,10 @@ case class Formatter(sim: Sim, index: Index)(
     format(fmt, Vector())
 
   private def format(fmt: String, last: Vector[Option[Boolean]]): String = fmt match {
-    case patt(head, spec, "*", tail) => head + render(spec, last) + format(tail, last)
-    case patt(head, spec, path, tail) => head + render(spec, getBus(path)) + format(tail, getBus(path))
+    case patt(head, spec, path, from, until, tail) =>
+      val bus = if (path == "*") last else getBus(path)
+      val bus1 = if (from == null) bus else bus.slice(from.toInt, until.toInt)
+      head + render(spec, bus1) + format(tail, bus)
     case _ => fmt
   }
 
