@@ -69,13 +69,6 @@ def sequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
   )
 }
 
-def microprogSequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
-  val t = ringCounter(6, clk, clr)
-  val addr1 = addrRom(instr)
-  val addr2 = presettableCounter(addr1, t(2), clk, and(clr, not(posEdge(t(0)))))
-  ControlBus(controlRom(addr2))
-}
-
 def instrRegister(bus: Bus, load: Port, clk: Port, clr: Port, enable: Port): Spec[Bus] = newSpec {
   val (bus0, bus1) = bus.splitAt(4)
   buffered(enable)(register(bus1, load, clk)) ~> bus1
@@ -103,43 +96,4 @@ def accumulator(bus: Bus, clk: Port, load: Port, enable: Port): Spec[Bus] = newS
 
 def alu(bus: Bus, ins1: Bus, ins2: Bus, sub: Port, enable: Port): Spec[Unit] = newSpec {
   buffered(enable)(addSub(ins1, ins2, sub)) ~> bus
-}
-
-def addrRom(addr: Bus): Spec[Bus] = newSpec {
-  def toBin(x: Int, n: Int): Seq[Boolean] = (0 until n).map(i => (x & (1 << i)) != 0)
-
-  // format: off
-  val data = (0 to 15).map {
-    case 0 => toBin(3, 4)     // LDA
-    case 1 => toBin(6, 4)     // ADD
-    case 2 => toBin(9, 4)     // SUB
-    case 14 => toBin(12, 4)   // OUT
-    case _ => toBin(0, 4)     // Not used
-  }
-  // format: on
-  rom(data, addr)
-}
-
-def controlRom(addr: Bus): Spec[Bus] = newSpec {
-  // format: off
-  val data = Vector(
-    ControlBus.fromBits(Ep, Lm),      // t1
-    ControlBus.fromBits(Cp),          // t2
-    ControlBus.fromBits(Ce, Li),      // t3
-    ControlBus.fromBits(Lm, Ei),      // t4 LDA
-    ControlBus.fromBits(Ce, La),      // t5 LDA
-    ControlBus.fromBits(),            // t6 LDA
-    ControlBus.fromBits(Lm, Ei),      // t4 ADD
-    ControlBus.fromBits(Ce, Lb),      // t5 ADD
-    ControlBus.fromBits(La, Eu),      // t6 ADD
-    ControlBus.fromBits(Lm, Ei),      // t4 SUB
-    ControlBus.fromBits(Ce, Lb),      // t5 SUB
-    ControlBus.fromBits(La, Su, Eu),  // t6 SUB
-    ControlBus.fromBits(Ea, Lo),      // t4 OUT
-    ControlBus.fromBits(),            // t5 OUT
-    ControlBus.fromBits(),            // t6 OUT
-    ControlBus.fromBits()             // Not used
-  )
-  // format: on
-  rom(data, addr)
 }
