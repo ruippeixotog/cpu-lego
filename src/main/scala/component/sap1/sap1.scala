@@ -24,7 +24,7 @@ def sap1(clkSig: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
-  val hlt = multi(and)(instr: _*)
+  val hlt = andM(instr: _*)
   val clk = clock(clkSig, clr, hlt)
   val con = sequencer(instr, clk, clr)
 
@@ -53,18 +53,18 @@ def sequencer(instr: Bus, clk: Port, clr: Port): Spec[ControlBus] = newSpec {
 
   ControlBus(
     Vector(
-      multi(or)(and(t4, out)),
-      multi(or)(and(t5, add), and(t5, sub)),
-      multi(or)(and(t6, add), and(t6, sub)),
-      multi(or)(and(t6, sub)),
-      multi(or)(and(t4, out)),
-      multi(or)(and(t5, lda), and(t6, add), and(t6, sub)),
-      multi(or)(and(t4, lda), and(t4, add), and(t4, sub)),
-      multi(or)(t3),
-      multi(or)(t3, and(t5, lda), and(t5, add), and(t5, sub)),
-      multi(or)(t1, and(t4, lda), and(t4, add), and(t4, sub)),
-      multi(or)(t1),
-      multi(or)(t2)
+      orM(and(t4, out)),
+      orM(and(t5, add), and(t5, sub)),
+      orM(and(t6, add), and(t6, sub)),
+      orM(and(t6, sub)),
+      orM(and(t4, out)),
+      orM(and(t5, lda), and(t6, add), and(t6, sub)),
+      orM(and(t4, lda), and(t4, add), and(t4, sub)),
+      orM(t3),
+      orM(t3, and(t5, lda), and(t5, add), and(t5, sub)),
+      orM(t1, and(t4, lda), and(t4, add), and(t4, sub)),
+      orM(t1),
+      orM(t2)
     )
   )
 }

@@ -6,8 +6,8 @@ import core._
 /** A full adder (page 81).
   */
 def fullAdder(in1: Port, in2: Port, in3: Port): Spec[(Port, Port)] = newSpec {
-  val carry = multi(or)(and(in1, in2), and(in1, in3), and(in2, in3))
-  val out = multi(xor)(in1, in2, in3)
+  val carry = orM(and(in1, in2), and(in1, in3), and(in2, in3))
+  val out = xorM(in1, in2, in3)
   (out, carry)
 }
 
