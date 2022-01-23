@@ -91,14 +91,15 @@ class BuilderAPIMacros()(using qctx: Quotes) {
         '{ $env.register(${ Expr(name) }, $port) }
       case '{ $bus: Bus } =>
         '{ $env.register(${ Expr(name) }, $bus) }
-      case '{ $p: (t, u) } =>
-        Expr.block(
-          List(
-            registerPorts(env, s"${name}1", '{ $p._1 }),
-            registerPorts(env, s"${name}2", '{ $p._2 })
-          ),
-          '{}
-        )
+      case '{ $p: Tuple } =>
+        def registerTuple[B <: Tuple: Type](exprB: Expr[B], idx: Int): List[Expr[Unit]] = {
+          exprB match {
+            case '{ $p: EmptyTuple } => Nil
+            case '{ $p: (t *: u) } =>
+              registerPorts(env, s"${name}${idx}", '{ $p.head }) :: registerTuple('{ $p.tail }, idx + 1)
+          }
+        }
+        Expr.block(registerTuple(p, 1), '{})
       case '{ $obj: t } =>
         Expr.block(
           TypeRepr.of[t].typeSymbol.caseFields.map { sym =>
