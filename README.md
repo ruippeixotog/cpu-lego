@@ -24,9 +24,9 @@ The project is organized into the following packages:
 
 It makes heavy use of two features introduced by Scala 3:
 
-- [Context functions](https://docs.scala-lang.org/scala3/reference/contextual/context-functions.html): `Spec[A]` is an alias for a context function `BuilderEnv ?=> A` (a function that receives an implicit instance of a `BuilderEnv` and returns an `A`). This allowed me to hide away the mutable machinery needed to represent a component graph and expose only component blueprints fully focused on composition with zero boilerplate.
+- [Context functions](https://docs.scala-lang.org/scala3/reference/contextual/context-functions.html): `Spec[A]` is an alias for a context function `BuilderEnv ?=> A` (a function that receives a given instance of a `BuilderEnv` and returns an `A`). This allowed me to hide away the mutable machinery needed to represent a component graph and expose only component blueprints fully focused on composition with zero boilerplate.
 
-- [Macros](https://docs.scala-lang.org/scala3/reference/metaprogramming/index.html): `newSpec` is a macro used throughout component definitions as a way to define the boundaries of a logical component. It doesn't change the behavior of the code it wraps, but it collects information about the function's context (such as its name and name of their arguments) to allow for a better representation of the circuit at runtime (e.g. referencing ports by their name). `newPort` is another example of a macro-powered constructor.
+- [Metaprogramming](https://docs.scala-lang.org/scala3/reference/metaprogramming/index.html): `newSpec` is a macro used throughout component definitions as a way to define the boundaries of a logical component. It doesn't change the behavior of the code it wraps, but it collects information about the function's context (such as its name and name of their arguments) to allow for a better representation of the circuit at runtime (e.g. referencing ports by their name). `newPort` is another example of a macro-powered constructor.
 
 ## License
 
