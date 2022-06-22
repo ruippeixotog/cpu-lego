@@ -10,7 +10,7 @@ The goal of this project was to find out a minimal set of building blocks that c
 
 - `NAND`: the universal logic gate, from which every other boolean function can be expressed.
 - `FlipFlop`: an [SR latch](https://en.wikipedia.org/wiki/Flip-flop_(electronics)#Simple_set-reset_latches), the basic unit of memory. It could theoretically be implemented using two NANDs, but I was finding it hard to avoid race conditions with my current simulator implementation. I may revisit this later.
-- `Clock`: a [clock signal](https://en.wikipedia.org/wiki/Clock_signal) with a configurable frequency. This can also be reproduced using chains of NANDs, but I decided to make them intrinsic as they are usually implemented outside the realm of digital circuits in the real world as well.
+- `Clock`: a [clock signal](https://en.wikipedia.org/wiki/Clock_signal) with a configurable frequency. This can also be reproduced using chains of NANDs given they have a non-zero propagation delay, but I decided to make them intrinsic as they are usually implemented outside the realm of digital circuits in the real world as well.
 - `Switch`: a [tristate buffer](https://en.wikipedia.org/wiki/Three-state_logic), required to operate bidirectional shared buses.
 
 Those are the only intrinsic components, implemented at the simulator level. Every other component is built as a function of these, with interactions between them simulated as digital circuits.
