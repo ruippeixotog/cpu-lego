@@ -1,12 +1,12 @@
 name := "cpu-lego"
 organization := "net.ruippeixotog"
 
-scalaVersion := "3.1.3"
+scalaVersion := "3.2.1"
 
 libraryDependencies ++= Seq(
-  "org.scalacheck" %% "scalacheck" % "1.16.0" % "test",
-  "org.specs2" %% "specs2-core" % "5.0.1" % "test",
-  "org.specs2" %% "specs2-scalacheck" % "5.0.1" % "test"
+  "org.scalacheck" %% "scalacheck" % "1.17.0" % "test",
+  "org.specs2" %% "specs2-core" % "5.2.0" % "test",
+  "org.specs2" %% "specs2-scalacheck" % "5.2.0" % "test"
 )
 
 scalacOptions ++= Seq(
