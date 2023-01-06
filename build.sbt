@@ -1,4 +1,4 @@
-name := "computer-simulator"
+name := "cpu-lego"
 organization := "net.ruippeixotog"
 
 scalaVersion := "3.1.3"
