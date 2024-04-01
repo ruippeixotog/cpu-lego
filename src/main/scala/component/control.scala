@@ -27,3 +27,12 @@ def mux(ins: Bus, sel: Bus): Spec[Port] = newSpec {
   assert(ins.length == 1 << sel.length, "Input and address bus sizes do not match")
   ins.zip(decoder(sel, High)).map(and).reduce(or)
 }
+
+/** An `ins.length` to `width` multiplexer. `ins.length` must be equal to 2^`sel.length` * width.
+  */
+def muxN(ins: Bus, sel: Bus, width: Int): Spec[Bus] = newSpec {
+  assert(ins.length == (1 << sel.length) * width, "Input and address bus sizes do not match for given width")
+
+  val words = ins.grouped(width).toVector
+  (0 until width).map { i => mux(words.map(_(i)), sel) }.toVector
+}

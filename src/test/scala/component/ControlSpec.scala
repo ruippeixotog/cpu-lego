@@ -87,4 +87,23 @@ class ControlSpec extends BaseSpec {
       buildAndRun { mux(ins, sel) } must throwAn[AssertionError]
     }
   }
+
+  "A muxN" should {
+
+    "act as an M-to-N multiplexer" in {
+      forAll { (sel: Vector[LogicLevel]) =>
+        forAll(Gen.choose(1, 4)) { width =>
+          forAll(Gen.listOfN((1 << sel.length) * width, genLogicLevel).map(_.toVector)) { ins =>
+            val (out, sim) = buildAndRun { muxN(ins, sel, width) }
+            sim.get(out).sequence must beSome(ins.grouped(width).toVector(sel.toInt).map(_.toBool))
+          }
+        }
+      }
+    }
+
+    "throw when the input bus size and the address size do not match" in {
+      val ins, sel = newBus(3)
+      buildAndRun { muxN(ins, sel, 2) } must throwAn[AssertionError]
+    }
+  }
 }
