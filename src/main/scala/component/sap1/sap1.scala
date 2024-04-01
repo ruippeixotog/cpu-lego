@@ -24,7 +24,7 @@ def sap1(clkSig: Port, clr: Port, ramIn: Input): Spec[(Port, Bus)] = newSpec {
   val bus = newBus(8)
 
   val instr = newBus(4)
-  val hlt = andM(instr: _*)
+  val hlt = andM(instr*)
   val clk = clock(clkSig, clr, hlt)
   val con = sequencer(instr, clk, clr)
 

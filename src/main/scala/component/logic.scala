@@ -12,11 +12,11 @@ def and(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 def andM(ins: Port*): Spec[Port] = newSpec {
-  multi(and)(ins: _*)
+  multi(and)(ins*)
 }
 
 def nandM(ins: Port*): Spec[Port] = newSpec {
-  not(multi(and)(ins: _*))
+  not(multi(and)(ins*))
 }
 
 def or(in1: Port, in2: Port): Spec[Port] = newSpec {
@@ -24,7 +24,7 @@ def or(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 def orM(ins: Port*): Spec[Port] = newSpec {
-  multi(or)(ins: _*)
+  multi(or)(ins*)
 }
 
 def nor(in1: Port, in2: Port): Spec[Port] = newSpec {
@@ -32,7 +32,7 @@ def nor(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 def norM(ins: Port*): Spec[Port] = newSpec {
-  not(multi(or)(ins: _*))
+  not(multi(or)(ins*))
 }
 
 def xor(in1: Port, in2: Port): Spec[Port] = newSpec {
@@ -41,7 +41,7 @@ def xor(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 def xorM(ins: Port*): Spec[Port] = newSpec {
-  multi(xor)(ins: _*)
+  multi(xor)(ins*)
 }
 
 def xnor(in1: Port, in2: Port): Spec[Port] = newSpec {
@@ -49,5 +49,5 @@ def xnor(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 def xnorM(ins: Port*): Spec[Port] = newSpec {
-  not(multi(xor)(ins: _*))
+  not(multi(xor)(ins*))
 }

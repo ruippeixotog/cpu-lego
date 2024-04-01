@@ -39,7 +39,7 @@ abstract class BaseSpec extends Specification with ScalaCheck {
   }
 
   def foreachTick(comp: Component, fromTick: Int, toTick: Int)(f: (Int, Sim) => Result): Result = {
-    runPlan(comp, (fromTick to toTick).map { tick => (tick, f(tick, _)) }: _*)
+    runPlan(comp, (fromTick to toTick).map { tick => (tick, f(tick, _)) }*)
   }
 
   // --- Extension methods ---

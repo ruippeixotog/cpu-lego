@@ -15,7 +15,7 @@ def t74181(s: Bus, a: Bus, b: Bus, cn: Port, m: Port): Spec[T74181Out] = newSpec
 
   val cs = (0 to 2)
     .scanLeft(Vector(cn)) { case (ands, i) => ands.map(and(_, gs(i))) :+ ps(i) }
-    .map { ands => not(and(notM, orM(ands: _*))) }
+    .map { ands => not(and(notM, orM(ands*))) }
 
   val f = (0 to 3).toVector.map { i => xor(cs(i), and(not(ps(i)), gs(i))) }
 

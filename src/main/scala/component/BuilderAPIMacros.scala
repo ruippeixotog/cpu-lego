@@ -50,7 +50,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
 
     def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
       val exprs = macroOwner.paramSymss.flatten.map { sym =>
-        val ValDef(name, ttree, _) = sym.tree
+        val ValDef(name, ttree, _) = sym.tree: @unchecked
         ttree.tpe.asType match {
           case '[t] => registerPorts(env, name, Ref(sym).asExprOf[t])
         }

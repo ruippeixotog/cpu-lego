@@ -8,7 +8,7 @@ import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
 import simulator.Sim
 
-trait SequentialScenarios { this: Specification with ScalaCheck =>
+trait SequentialScenarios { this: Specification & ScalaCheck =>
   type BeforeActionFunc = (Sim, Port, Boolean, Option[Boolean]) => Sim
   type ActionFunc = (Sim, Port, Boolean, Option[Boolean]) => Unit
 
