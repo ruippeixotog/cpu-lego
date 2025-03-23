@@ -5,7 +5,7 @@ import core._
 
 /** A NAND gate (https://en.wikipedia.org/wiki/NAND_gate).
   */
-def nand(_in1: Port, _in2: Port): Spec[Port] = newSpec {
+def nand(_in1: Port @hidden, _in2: Port @hidden): Spec[Port] = newSpec {
   val in1, in2, out = newPort()
   summon[BuilderEnv].add("impl", NAND(in1, in2, out))
   _in1 ~> in1
@@ -17,7 +17,7 @@ def nand(_in1: Port, _in2: Port): Spec[Port] = newSpec {
   *
   * Other type of latches can be found in `memory.scala`.
   */
-def flipflop(_set: Port, _reset: Port): Spec[(Port, Port)] = newSpec {
+def flipflop(_set: Port @hidden, _reset: Port @hidden): Spec[(Port, Port)] = newSpec {
   val set, reset, q, nq = newPort()
   summon[BuilderEnv].add("impl", FlipFlop(set, reset, q, nq))
   _set ~> set
@@ -35,7 +35,7 @@ def clock(freq: Int): Spec[Port] = newSpec {
 
 /** A switch enabling three-state logic (https://en.wikipedia.org/wiki/Three-state_logic).
   */
-def switch(_in: Port, _enable: Port): Spec[Port] = newSpec {
+def switch(_in: Port @hidden, _enable: Port @hidden): Spec[Port] = newSpec {
   val in, out, enable = newPort()
   summon[BuilderEnv].add("impl", Switch(in, out, enable))
   _in ~> in

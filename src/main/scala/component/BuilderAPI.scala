@@ -1,5 +1,7 @@
 package component
 
+import scala.annotation.StaticAnnotation
+
 import core._
 
 object BuilderAPI {
@@ -64,4 +66,8 @@ object BuilderAPI {
       CompositeComponent(name.getOrElse(super.toString), components, wires, namedPorts)
     )
   }
+
+  // annotations
+
+  final class hidden extends StaticAnnotation
 }

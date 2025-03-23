@@ -1,5 +1,6 @@
 package component
 
+import scala.annotation.StaticAnnotation
 import scala.quoted._
 
 import component.BuilderAPI._
@@ -51,8 +52,15 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
       val exprs = macroOwner.paramSymss.flatten.map { sym =>
         val ValDef(name, ttree, _) = sym.tree: @unchecked
-        ttree.tpe.asType match {
-          case '[t] => registerPorts(env, name, Ref(sym).asExprOf[t])
+
+        ttree match {
+          case Annotated(ty, ann) if hasHiddenAnnotation(ann) => '{}
+          case _ =>
+            ttree.tpe.asType match {
+              // Doesn't work due to https://github.com/scala/scala3/issues/22773
+              // case '[t @`hidden`] => '{}
+              case '[t] => registerPorts(env, name, Ref(sym).asExprOf[t])
+            }
         }
       }
       Expr.block(exprs, '{})
@@ -129,6 +137,13 @@ class BuilderAPIMacros()(using qctx: Quotes) {
         }
       case _ =>
         portExpr
+    }
+  }
+
+  private def hasHiddenAnnotation(ann: Term): Boolean = {
+    ann.asExpr match {
+      case '{ new `hidden`() } => true
+      case _ => false
     }
   }
 }
