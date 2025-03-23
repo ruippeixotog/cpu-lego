@@ -1,7 +1,7 @@
 package component
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 
 def not(in: Port): Spec[Port] = newSpec {
   nand(in, in)

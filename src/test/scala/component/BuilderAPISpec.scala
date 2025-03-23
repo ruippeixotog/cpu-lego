@@ -1,8 +1,8 @@
 package component
 
-import component.BuilderAPI._
-import core._
-import testkit._
+import component.BuilderAPI.*
+import core.*
+import testkit.*
 
 class BuilderAPISpec extends BaseSpec {
 

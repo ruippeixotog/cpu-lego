@@ -1,7 +1,7 @@
 package component
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 
 /** Non-intrinsic version of `flipflop`. A race condition occurs when both `set` and `reset` are Low (page 92).
   */

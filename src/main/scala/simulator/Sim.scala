@@ -3,10 +3,10 @@ package simulator
 import scala.annotation.tailrec
 import scala.collection.immutable.TreeMap
 
-import core._
+import core.*
 import util.UnionFind
 
-import Sim.Event._
+import Sim.Event.*
 
 object Sim {
 

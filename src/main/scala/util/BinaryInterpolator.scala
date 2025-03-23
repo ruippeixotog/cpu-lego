@@ -1,6 +1,6 @@
 package util
 
-import util.Implicits._
+import util.Implicits.*
 
 class BinaryInterpolator(sc: StringContext) {
 

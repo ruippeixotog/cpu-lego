@@ -1,7 +1,7 @@
 package component
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 
 /** A NAND gate (https://en.wikipedia.org/wiki/NAND_gate).
   */

@@ -1,11 +1,11 @@
 package component.i8080
 
-import component.BuilderAPI._
-import component._
-import core._
+import component.*
+import component.BuilderAPI.*
+import core.*
 
-import ControlBus._
-import ControlBus.Bit._
+import ControlBus.*
+import ControlBus.Bit.*
 
 case class Input(d: Bus, ready: Port, hold: Port, int: Port, reset: Port, clk1: Port, clk2: Port)
 case class Output(a: Bus, sync: Port, dbin: Port, wait0: Port, wr: Port, hlda: Port, inte: Port)

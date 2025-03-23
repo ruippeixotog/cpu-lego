@@ -2,7 +2,7 @@ package component
 
 import scala.annotation.StaticAnnotation
 
-import core._
+import core.*
 
 object BuilderAPI {
 

@@ -1,12 +1,12 @@
 package component.ic
 
-import component._
-import core._
+import component.*
+import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.rng.Seed
 import org.scalacheck.{Arbitrary, Gen}
 import testkit.BaseSpec
-import util.Implicits._
+import util.Implicits.*
 
 class T7400Spec extends BaseSpec {
 

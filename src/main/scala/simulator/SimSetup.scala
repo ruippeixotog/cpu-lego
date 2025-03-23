@@ -1,6 +1,6 @@
 package simulator
 
-import core._
+import core.*
 
 object SimSetup {
 

@@ -1,7 +1,7 @@
 package util
 
 import simulator.{Index, Sim}
-import util.Implicits._
+import util.Implicits.*
 
 case class Formatter(sim: Sim, index: Index)(
     renderer: PartialFunction[(String, Vector[Option[Boolean]]), Any] = (spec, _) => {}

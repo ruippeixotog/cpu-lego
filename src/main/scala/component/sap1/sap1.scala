@@ -1,11 +1,11 @@
 package component.sap1
 
-import component.BuilderAPI._
-import component._
-import core._
+import component.*
+import component.BuilderAPI.*
+import core.*
 
-import ControlBus._
-import ControlBus.Bit._
+import ControlBus.*
+import ControlBus.Bit.*
 
 case class Input(prog: Port, write: Port, addr: Bus, data: Bus)
 

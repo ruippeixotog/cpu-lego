@@ -2,7 +2,7 @@ package util
 
 import scala.annotation.targetName
 
-import core._
+import core.*
 
 object Implicits {
 

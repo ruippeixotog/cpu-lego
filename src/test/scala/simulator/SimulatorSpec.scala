@@ -1,14 +1,14 @@
 package simulator
 
-import component.BuilderAPI._
-import component._
-import core._
+import component.*
+import component.BuilderAPI.*
+import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import testkit._
-import util.Implicits._
+import testkit.*
+import util.Implicits.*
 
 class SimulatorSpec extends BaseSpec {
 

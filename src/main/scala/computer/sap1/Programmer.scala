@@ -1,8 +1,8 @@
 package computer.sap1
 
-import component.sap1._
-import simulator._
-import util.Implicits._
+import component.sap1.*
+import simulator.*
+import util.Implicits.*
 
 case class Data(value: Int)
 

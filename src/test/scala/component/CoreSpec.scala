@@ -1,15 +1,15 @@
 package component
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import simulator.{Circuit, Sim, SimSetup}
-import testkit._
-import util.Implicits._
+import testkit.*
+import util.Implicits.*
 
 class CoreSpec extends BaseSpec with SequentialScenarios {
 

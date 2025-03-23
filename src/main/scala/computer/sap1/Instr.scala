@@ -1,6 +1,6 @@
 package computer.sap1
 
-import util.Implicits._
+import util.Implicits.*
 
 enum Instr(val repr: Vector[Boolean]) {
   case LDA(addr: Int) extends Instr(b"0000$addr{4}")

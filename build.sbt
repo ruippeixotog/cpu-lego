@@ -10,11 +10,16 @@ libraryDependencies ++= Seq(
 )
 
 scalacOptions ++= Seq(
-  "-feature",
   "-language:implicitConversions",
-  "-no-indent",
-  "-unchecked"
+  "-feature",
+  "-unchecked",
+  "-old-syntax",
+  "-no-indent"
 )
+
+semanticdbEnabled := true
+scalafmtOnCompile := true
+scalafixOnCompile := true
 
 Test / fork := true
 Test / parallelExecution := false

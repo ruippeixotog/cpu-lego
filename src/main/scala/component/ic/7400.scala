@@ -1,8 +1,8 @@
 package component.ic
 
-import component.BuilderAPI._
-import component._
-import core._
+import component.*
+import component.BuilderAPI.*
+import core.*
 
 case class T74181Out(f: Bus, aEqB: Port, g: Port, cn4: Port, p: Port)
 

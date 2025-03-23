@@ -1,6 +1,6 @@
 package simulator
 
-import core._
+import core.*
 import util.UnionFind
 
 case class PortGroup(root: Port)

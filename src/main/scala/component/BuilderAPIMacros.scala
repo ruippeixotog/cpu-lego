@@ -1,12 +1,12 @@
 package component
 
 import scala.annotation.StaticAnnotation
-import scala.quoted._
+import scala.quoted.*
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 
-import BuilderAPIMacros._
+import BuilderAPIMacros.*
 
 object BuilderAPIMacros {
 

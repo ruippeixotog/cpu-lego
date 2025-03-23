@@ -1,10 +1,10 @@
 package computer.sap1
 
-import computer.sap1.Instr._
+import computer.sap1.Instr.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
-import testkit._
-import util.Implicits._
+import testkit.*
+import util.Implicits.*
 
 class Sap1Spec extends BaseSpec {
 

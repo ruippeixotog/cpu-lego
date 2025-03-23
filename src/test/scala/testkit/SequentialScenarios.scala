@@ -1,6 +1,6 @@
 package testkit
 
-import core._
+import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.specs2.ScalaCheck

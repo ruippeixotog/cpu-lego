@@ -2,15 +2,15 @@ package testkit
 
 import scala.annotation.targetName
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
 import simulator.Sim
-import util.Implicits._
+import util.Implicits.*
 
 abstract class BaseSpec extends Specification with ScalaCheck {
 

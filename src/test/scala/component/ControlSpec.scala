@@ -1,11 +1,11 @@
 package component
 
-import component.BuilderAPI._
-import core._
+import component.BuilderAPI.*
+import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
-import testkit._
-import util.Implicits._
+import testkit.*
+import util.Implicits.*
 
 class ControlSpec extends BaseSpec {
 

@@ -1,12 +1,12 @@
 package component.sap1
 
-import component.BuilderAPI._
-import component._
-import component.sap1.ControlBus.Bit._
-import core._
+import component.*
+import component.BuilderAPI.*
+import component.sap1.ControlBus.Bit.*
+import core.*
 import org.specs2.specification.core.Fragment
-import testkit._
-import util.Implicits._
+import testkit.*
+import util.Implicits.*
 
 class Sap1Spec extends BaseSpec with SequentialScenarios {
 

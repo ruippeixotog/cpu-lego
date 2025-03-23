@@ -1,6 +1,6 @@
 package simulator
 
-import core._
+import core.*
 
 case class Index(components: Map[String, Component], ports: Map[String, Port], buses: Map[String, Bus])
 

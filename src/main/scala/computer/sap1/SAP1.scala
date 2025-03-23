@@ -1,12 +1,12 @@
 package computer.sap1
 
-import component.BuilderAPI._
-import component.sap1._
-import computer.sap1.Instr._
-import core._
+import component.BuilderAPI.*
+import component.sap1.*
+import computer.sap1.Instr.*
+import core.*
 import simulator.{Index, Sim}
 import util.Formatter
-import util.Implicits._
+import util.Implicits.*
 
 case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
