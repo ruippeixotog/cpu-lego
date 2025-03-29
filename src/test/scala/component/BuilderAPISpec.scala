@@ -2,6 +2,7 @@ package component
 
 import component.BuilderAPI.*
 import core.*
+import core.Direction.*
 import testkit.*
 
 class BuilderAPISpec extends BaseSpec {
@@ -15,10 +16,10 @@ class BuilderAPISpec extends BaseSpec {
       Map(prefix -> c)
   }
 
-  def getPortsFlat(comp: Component, prefix: String = ""): Map[String, Port | Bus] = comp match {
+  def getPortsFlat(comp: Component, prefix: String = ""): Map[String, (Option[Direction], Port | Bus)] = comp match {
     case cc: CompositeComponent =>
-      cc.namedPorts.map { case (name, p) => (prefix + "." + name, p) } ++
-        cc.components.foldLeft(Map[String, Port | Bus]()) { case (acc, (name, c)) =>
+      cc.namedPorts.map { case (name, e) => (prefix + "." + name, e) } ++
+        cc.components.foldLeft(Map[String, (Option[Direction], Port | Bus)]()) { case (acc, (name, c)) =>
           acc ++ getPortsFlat(c, prefix + "." + name)
         }
     case _ =>
@@ -48,23 +49,23 @@ class BuilderAPISpec extends BaseSpec {
         )
       )
 
-      getPortsFlat(comp).keySet must beEqualTo(
-        Set(
-          ".nand.in1",
-          ".nand.in2",
-          ".nand.out",
-          ".nand$1.in1",
-          ".nand$1.in2",
-          ".nand$1.out",
-          ".myOperator.in",
-          ".myOperator.myPort",
-          ".myOperator.myBus",
-          ".myOperator.out",
-          ".myOperator.not.in",
-          ".myOperator.not.out",
-          ".myOperator.not.nand.in1",
-          ".myOperator.not.nand.in2",
-          ".myOperator.not.nand.out"
+      getPortsFlat(comp).map { case (name, (dir, _)) => (name, dir) } must beEqualTo(
+        Map(
+          ".nand.in1" -> Some(Input),
+          ".nand.in2" -> Some(Input),
+          ".nand.out" -> Some(Output),
+          ".nand$1.in1" -> Some(Input),
+          ".nand$1.in2" -> Some(Input),
+          ".nand$1.out" -> Some(Output),
+          ".myOperator.in" -> Some(Input),
+          ".myOperator.myPort" -> None,
+          ".myOperator.myBus" -> None,
+          ".myOperator.out" -> Some(Output),
+          ".myOperator.not.in" -> Some(Input),
+          ".myOperator.not.out" -> Some(Output),
+          ".myOperator.not.nand.in1" -> Some(Input),
+          ".myOperator.not.nand.in2" -> Some(Input),
+          ".myOperator.not.nand.out" -> Some(Output)
         )
       )
     }

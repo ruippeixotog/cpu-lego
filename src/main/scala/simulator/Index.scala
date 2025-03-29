@@ -15,8 +15,8 @@ object Index {
         val prefix = if (path.isEmpty) path else s"$path."
 
         val (ports, buses) = comp.namedPorts.toList.map {
-          case (name, port: Port) => (Some(prefix + name -> port), None)
-          case (name, bus: Bus) => (None, Some(prefix + name -> bus))
+          case (name, (_, port: Port)) => (Some(prefix + name -> port), None)
+          case (name, (_, bus: Bus)) => (None, Some(prefix + name -> bus))
         }.unzip
 
         val idx = Index(Map(path -> comp), ports.flatten.toMap, buses.flatten.toMap)

@@ -59,7 +59,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
             ttree.tpe.asType match {
               // Doesn't work due to https://github.com/scala/scala3/issues/22773
               // case '[t @`hidden`] => '{}
-              case '[t] => registerPorts(env, name, Ref(sym).asExprOf[t])
+              case '[t] => registerPorts(env, name, '{ Some(Direction.Input) }, Ref(sym).asExprOf[t])
             }
         }
       }
@@ -76,7 +76,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
           val innerEnv = summon[BuilderEnv]
           val innerRes = $spec
           ${ registerArgs('innerEnv) }
-          ${ registerPorts('innerEnv, "out", 'innerRes) }
+          ${ registerPorts('innerEnv, "out", '{ Some(Direction.Output) }, 'innerRes) }
           innerRes
         }
       )
@@ -93,18 +93,23 @@ class BuilderAPIMacros()(using qctx: Quotes) {
   private lazy val macroOwner: Symbol =
     owners.find(!_.flags.is(Flags.Synthetic)).get
 
-  def registerPorts[A: Type](env: Expr[BuilderEnv], name: String, expr: Expr[A]): Expr[Unit] = {
+  def registerPorts[A: Type](
+      env: Expr[BuilderEnv],
+      name: String,
+      dir: Expr[Option[Direction]],
+      expr: Expr[A]
+  ): Expr[Unit] = {
     expr match {
       case '{ $port: Port } =>
-        '{ $env.register(${ Expr(name) }, $port) }
+        '{ $env.register(${ Expr(name) }, $port, $dir) }
       case '{ $bus: Bus } =>
-        '{ $env.register(${ Expr(name) }, $bus) }
+        '{ $env.register(${ Expr(name) }, $bus, $dir) }
       case '{ $p: Tuple } =>
         def registerTuple[B <: Tuple: Type](exprB: Expr[B], idx: Int): List[Expr[Unit]] = {
           exprB match {
             case '{ $p: EmptyTuple } => Nil
             case '{ $p: (t *: u) } =>
-              registerPorts(env, s"${name}${idx}", '{ $p.head }) :: registerTuple('{ $p.tail }, idx + 1)
+              registerPorts(env, s"${name}${idx}", dir, '{ $p.head }) :: registerTuple('{ $p.tail }, idx + 1)
           }
         }
         Expr.block(registerTuple(p, 1), '{})
@@ -116,7 +121,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
               case DefDef(field, _, ttree, _) => (field, ttree)
             }
             ttree.tpe.asType match {
-              case '[t] => registerPorts(env, name + "_" + field, Select(obj.asTerm, sym).asExprOf[t])
+              case '[t] => registerPorts(env, name + "_" + field, dir, Select(obj.asTerm, sym).asExprOf[t])
               case _ => '{}
             }
           },
