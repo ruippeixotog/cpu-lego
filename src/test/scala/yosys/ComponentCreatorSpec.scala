@@ -23,7 +23,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
     outs("q").asInstanceOf[Port]
   }
 
-  "An AOI" should {
+  "An JSON-genrated AOI" should {
     "compute ~((a & b) | (c & d))" in forAll { (a: LogicLevel, b: LogicLevel, c: LogicLevel, d: LogicLevel) =>
       val expected = !((a.toBool && b.toBool) || (c.toBool && d.toBool))
       val (f, sim) = buildAndRun { aoi(a, b, c, d) }
@@ -31,7 +31,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
     }
   }
 
-  "A dLatch" should {
+  "A JSON-genrated dLatch" should {
 
     "start unset" in {
       val (q, comp) = buildComponent { dLatch(new Port(), new Port(), new Port()) }
