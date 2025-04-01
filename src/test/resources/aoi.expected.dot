@@ -1,0 +1,22 @@
+digraph "test_aoi" {
+rcF [ shape=octagon, label="F", color="black", fontcolor="black"];
+rcA [ shape=octagon, label="A", color="black", fontcolor="black"];
+rcB [ shape=octagon, label="B", color="black", fontcolor="black"];
+rcC [ shape=octagon, label="C", color="black", fontcolor="black"];
+rcD [ shape=octagon, label="D", color="black", fontcolor="black"];
+rankdir="LR";
+remincross=true;
+label="test_aoi";
+cnot [ shape=record, label="{{<p1> in}|not|{<p2> out}}", color="black", fontcolor="black"];
+cor [ shape=record, label="{{<p1> in1|<p2> in2}|or|{<p3> out}}", color="black", fontcolor="black"];
+cand [ shape=record, label="{{<p1> in1|<p2> in2}|and|{<p3> out}}", color="black", fontcolor="black"];
+cand1 [ shape=record, label="{{<p1> in1|<p2> in2}|and$1|{<p3> out}}", color="black", fontcolor="black"];
+cnot:p2:e -> rcF:w [color="black", fontcolor="black", label=""];
+rcD:e -> cand1:p2:w [color="black", fontcolor="black", label=""];
+rcB:e -> cand:p2:w [color="black", fontcolor="black", label=""];
+rcA:e -> cand:p1:w [color="black", fontcolor="black", label=""];
+rcC:e -> cand1:p1:w [color="black", fontcolor="black", label=""];
+cand:p3:e -> cor:p1:w [color="black", fontcolor="black", label=""];
+cor:p3:e -> cnot:p1:w [color="black", fontcolor="black", label=""];
+cand1:p3:e -> cor:p2:w [color="black", fontcolor="black", label=""];
+}

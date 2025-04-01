@@ -13,29 +13,6 @@ import yosys.ComponentCreator
 
 object GraphvizDrawer {
 
-  def test(depth: Int = 0): Unit = {
-    // val latchCreator = ComponentCreator(Paths.get("src/test/resources/dlatch.json"))
-
-    // def dLatch(d: Port, en: Port, rstn: Port): Spec[Port] = {
-    //   val outs = latchCreator.create("d_latch", Map("d" -> d, "en" -> en, "rstn" -> rstn))
-    //   outs("q").asInstanceOf[Port]
-    // }
-
-    // val d, en, rstn = new Port()
-    // val (f, comp) = buildComponent { dLatch(d, en, rstn) }
-
-    val (f, comp) = buildComponent {
-      val a, b, c, d = newPort()
-      val and1 = and(a, b)
-      val and2 = and(c, d)
-      val or1 = or(and1, and2)
-      not(or1)
-    }
-
-    val out = new PrintStream("test.dot")
-    out.println(toDot(comp.asInstanceOf[CompositeComponent], depth))
-  }
-
   class PortGraphIndex(rootComp: CompositeComponent, depth: Int) {
     private val uf = allWires(rootComp, depth).foldLeft(UnionFind[Port]())(_.merge.tupled(_))
     private val portNodes = mutable.Map[Port, mutable.Set[(Direction, String)]]()
@@ -58,11 +35,11 @@ object GraphvizDrawer {
     }
   }
 
-  def toDot(rootComp: CompositeComponent, depth: Int): String = {
+  def toDot(rootComp: CompositeComponent, depth: Int = 0): String = {
     val portMap = new PortGraphIndex(rootComp, depth)
 
     val builder = new StringBuilder()
-      .append("digraph \"")
+      .append(s"digraph \"")
       .append(rootComp.name)
       .append("\" {\n")
 
@@ -84,37 +61,43 @@ object GraphvizDrawer {
       builder.append(s"""$name [ shape=octagon, label="$label", color="black", fontcolor="black"];\n""")
     }
 
+    def addRecordNode(name: String, lPorts: String, label: String, rPorts: String): Unit = {
+      builder.append(
+        s"""$name [ shape=record, label="{{$lPorts}|$label|{$rPorts}}", color="black", fontcolor="black"];\n"""
+      )
+    }
+
     def aux(label: String, comp: CompositeComponent, idPrefix: String, depth: Int): Unit = {
-      builder.append(s"label=\"${label}\";\n")
       builder.append("rankdir=\"LR\";\n")
       builder.append("remincross=true;\n")
+      builder.append(s"label=\"${label}\";\n")
 
       // Add nodes for components
       comp.components.foreach { case (name, comp) =>
         val cName = s"${idPrefix}c${name.replaceAll("\\$", "")}"
-        val (shape, label) = comp match {
+        comp match {
           case NAND(in1, in2, out) =>
             portMap.add(in1, Direction.Input, s"$cName:p1")
             portMap.add(in2, Direction.Input, s"$cName:p2")
             portMap.add(out, Direction.Output, s"$cName:p3")
-            ("record", s"""{{<p1> in1|<p2> in2}|$name\nNAND|{<p3> out}}""")
+            addRecordNode(cName, "<p1> in1|<p2> in2", s"$name\\nNAND", "<p3> out")
 
           case FlipFlop(set, reset, q, nq) =>
             portMap.add(set, Direction.Input, s"$cName:p1")
             portMap.add(reset, Direction.Input, s"$cName:p2")
             portMap.add(q, Direction.Output, s"$cName:p3")
             portMap.add(nq, Direction.Output, s"$cName:p4")
-            ("record", s"""{{<p1> set|<p2> reset}|$name\nFlipFlop|{<p3> q|<p4> nq}}""")
+            addRecordNode(cName, "<p1> set|<p2> reset", s"$name\\nFlipFlop", "<p3> q|<p4> nq")
 
           case Clock(_, out) =>
             portMap.add(out, Direction.Input, s"$cName:p1")
-            ("record", s"""{{}|$name|{<p1> out}}""")
+            addRecordNode(cName, "", s"$name\nClock", "<p1> out")
 
           case Switch(in, out, enable) =>
             portMap.add(in, Direction.Input, s"$cName:p1")
             portMap.add(enable, Direction.Input, s"$cName:p2")
             portMap.add(out, Direction.Output, s"$cName:p3")
-            ("record", s"""{{<p1> in|<p2> enable}|$name\nSwitch|{<p3> out}}""")
+            addRecordNode(cName, "<p1> in|<p2> enable", s"$name\\nSwitch", "<p3> out")
 
           case cc: CompositeComponent if depth > 0 =>
             builder
@@ -124,7 +107,6 @@ object GraphvizDrawer {
               .append("style=dashed;")
             aux(name, cc, s"$idPrefix${cName}__", depth - 1)
             builder.append("}\n")
-            ("record", s"""{{}|$name|{}}""")
 
           case cc: CompositeComponent =>
             val ps = cc.namedPorts
@@ -146,10 +128,8 @@ object GraphvizDrawer {
               (psByDir.getOrElse(Direction.Input, Nil) ++ psByDir.getOrElse(Direction.Inout, Nil))
                 .mkString("|")
             val outPs = psByDir.getOrElse(Direction.Output, Nil).mkString("|")
-            // ("record", s"""{{${inPs}}|$name\\n${cc.name}|{${outPs}}}""")
-            ("record", s"""{{${inPs}}|$name|{${outPs}}}""")
+            addRecordNode(cName, inPs, name, outPs)
         }
-        builder.append(s"""$cName [ shape=$shape, label="$label" ];\n""")
       }
     }
 
