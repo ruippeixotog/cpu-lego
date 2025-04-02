@@ -1,8 +1,9 @@
 package yosys
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import scala.collection.mutable
+import scala.sys.process.*
 
 import component.*
 import component.BuilderAPI.*
@@ -107,6 +108,33 @@ case class ComponentCreator(design: Design) {
 }
 
 object ComponentCreator {
-  def apply(file: Path): ComponentCreator =
-    ComponentCreator(Design.fromJsonFile(file))
+
+  def fromVerilog(vFile: Path): ComponentCreator = {
+    val tmpDir = Files.createTempDirectory("cpu-lego")
+    val jsonFile = tmpDir.resolve("out.json")
+
+    Files.writeString(
+      tmpDir.resolve("script.ys"),
+      s"""
+      | read_verilog "${vFile.toAbsolutePath}"
+      | proc; opt
+      | fsm; opt 
+      | memory; opt 
+      | techmap; opt
+      | dfflegalize -cell $$_SR_PP_ x -cell $$_DFF_P_ x -cell $$_DFFSR_PNN_ x
+      | clean
+      | write_json "${jsonFile.toAbsolutePath}"
+    """.stripMargin
+    )
+
+    val procLogger = ProcessLogger(_ => ())
+    Process("yosys -p 'script script.ys'", tmpDir.toFile).!(procLogger) match {
+      case 0 => // Success
+      case _ => throw new RuntimeException(s"Yosys failed to process $vFile")
+    }
+    fromYosysJsonFile(jsonFile)
+  }
+
+  def fromYosysJsonFile(jsonFile: Path): ComponentCreator =
+    ComponentCreator(Design.fromJsonFile(jsonFile))
 }

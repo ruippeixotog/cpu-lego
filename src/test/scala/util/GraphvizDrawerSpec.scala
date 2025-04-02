@@ -10,8 +10,10 @@ import testkit.{BaseSpec, SnapshotTests}
 import yosys.ComponentCreator
 
 class GraphvizDrawerSpec(val cmdArgs: CommandLine) extends BaseSpec with SnapshotTests {
-  val aoiCreator = ComponentCreator(Path.of(ClassLoader.getSystemResource("aoi.json").toURI()))
-  val latchCreator = ComponentCreator(Path.of(ClassLoader.getSystemResource("dlatch.json").toURI()))
+  def resourcePath(res: String) = Path.of(getClass.getResource("/" + res).toURI)
+
+  val aoiCreator = ComponentCreator.fromYosysJsonFile(resourcePath("aoi.json"))
+  val latchCreator = ComponentCreator.fromYosysJsonFile(resourcePath("dlatch.json"))
 
   def aoi(a: Port, b: Port, c: Port, d: Port): Spec[Port] = {
     val outs = aoiCreator.create("aoi", Map("A" -> a, "B" -> b, "C" -> c, "D" -> d))
