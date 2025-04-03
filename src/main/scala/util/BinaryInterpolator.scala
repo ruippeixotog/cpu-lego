@@ -10,7 +10,7 @@ class BinaryInterpolator(sc: StringContext) {
       .map {
         case (arg: Boolean, rest) => arg +: vec(rest)
         case (arg: Int, s"{$n}$rest") => arg.toBoolVec(n.toInt) ++: vec(rest)
-        case (arg: Vector[Boolean], rest) => arg ++ vec(rest)
+        case (arg: Vector[Boolean] @unchecked, rest) => arg ++ vec(rest)
         case (arg, _) => sys.error("Illegal argument type: " + arg.getClass)
       }
       .flatten
