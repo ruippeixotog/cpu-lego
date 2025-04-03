@@ -24,7 +24,7 @@ case class ComponentCreator(design: Design) {
         // println(s"[in] Connecting $name to ${module.ports(name).bits.head}")
         p ~> portReg.getOrElseUpdate(module.ports(name).bits.head, new Port())
       case (name, p: Bus) =>
-        module.ports(name).bits.foreach { bit => p(bit) ~> portReg.getOrElseUpdate(bit, new Port()) }
+        module.ports(name).bits.zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
     }
 
     val components = module.cells.map { case (compName, cell) =>
@@ -33,7 +33,7 @@ case class ComponentCreator(design: Design) {
         .map { case (name, dir) =>
           name -> (cell.connections(name) match {
             case Vector(bit) => portReg.getOrElseUpdate(bit, new Port())
-            case bits => bits.map(portReg)
+            case bits => bits.map { b => portReg.getOrElseUpdate(b, new Port()) }
           })
         }
 
@@ -44,7 +44,7 @@ case class ComponentCreator(design: Design) {
           // println(s"[comp $compName] Connecting $name to ${cell.connections(name).head}")
           p ~> portReg.getOrElseUpdate(cell.connections(name).head, new Port())
         case (name, p: Bus) =>
-          cell.connections(name).foreach { bit => p(bit.asInstanceOf[Int]) ~> portReg(bit) }
+          cell.connections(name).zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
       }
     }
 
