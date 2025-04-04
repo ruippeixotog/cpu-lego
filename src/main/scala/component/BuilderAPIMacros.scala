@@ -56,10 +56,14 @@ class BuilderAPIMacros()(using qctx: Quotes) {
         ttree match {
           case Annotated(ty, ann) if hasHiddenAnnotation(ann) => '{}
           case _ =>
+            val dir = ttree match {
+              case Annotated(ty, ann) if hasInoutAnnotation(ann) => '{ Direction.Inout }
+              case _ => '{ Direction.Input }
+            }
             ttree.tpe.asType match {
               // Doesn't work due to https://github.com/scala/scala3/issues/22773
               // case '[t @`hidden`] => '{}
-              case '[t] => registerPorts(env, name, '{ Some(Direction.Input) }, Ref(sym).asExprOf[t])
+              case '[t] => registerPorts(env, name, '{ Some($dir) }, Ref(sym).asExprOf[t])
             }
         }
       }
@@ -148,6 +152,13 @@ class BuilderAPIMacros()(using qctx: Quotes) {
   private def hasHiddenAnnotation(ann: Term): Boolean = {
     ann.asExpr match {
       case '{ new `hidden`() } => true
+      case _ => false
+    }
+  }
+
+  private def hasInoutAnnotation(ann: Term): Boolean = {
+    ann.asExpr match {
+      case '{ new `inout`() } => true
       case _ => false
     }
   }

@@ -70,4 +70,5 @@ object BuilderAPI {
   // annotations
 
   final class hidden extends StaticAnnotation
+  final class inout extends StaticAnnotation
 }
