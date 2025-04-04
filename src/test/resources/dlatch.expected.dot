@@ -14,20 +14,20 @@ cnot1 [ shape=record, label="{{<p1> in}|not$1|{<p2> out}}", color="black", fontc
 corNot [ shape=record, label="{{<p1> in1|<p2> in2}|orNot|{<p3> out}}", color="black", fontcolor="black"];
 cnot2 [ shape=record, label="{{<p1> in}|not$2|{<p2> out}}", color="black", fontcolor="black"];
 cand [ shape=record, label="{{<p1> in1|<p2> in2}|and|{<p3> out}}", color="black", fontcolor="black"];
-rcd:e -> cmux:p2:w [color="black", fontcolor="black", label=""];
 // Port not connected: cflipflop:p4
-cnot:p2:e -> cflipflop:p1:w [color="black", fontcolor="black", label=""];
-cnot1:p2:e -> cflipflop:p2:w [color="black", fontcolor="black", label=""];
+cnot2:p2:e -> cand:p2:w [color="black", fontcolor="black", label=""];
+cflipflop:p3:e -> rcq:w [color="black", fontcolor="black", label=""];
 cmux:p4:e -> cor:p2:w [color="black", fontcolor="black", label=""];
 cmux:p4:e -> corNot:p2:w [color="black", fontcolor="black", label=""];
-cflipflop:p3:e -> rcq:w [color="black", fontcolor="black", label=""];
-cand:p3:e -> cor:p1:w [color="black", fontcolor="black", label=""];
-cand:p3:e -> corNot:p1:w [color="black", fontcolor="black", label=""];
-cor:p3:e -> cnot1:p1:w [color="black", fontcolor="black", label=""];
-// Port not connected: cmux:p1
-rcen:e -> cnot2:p1:w [color="black", fontcolor="black", label=""];
-cnot2:p2:e -> cand:p2:w [color="black", fontcolor="black", label=""];
-corNot:p3:e -> cnot:p1:w [color="black", fontcolor="black", label=""];
 rcrstn:e -> cmux:p3:w [color="black", fontcolor="black", label=""];
 rcrstn:e -> cand:p1:w [color="black", fontcolor="black", label=""];
+kcmux_p1 [ label="1'0" ];kcmux_p1 -> cmux:p1 [color="black", fontcolor="black", label=""];
+cnot:p2:e -> cflipflop:p1:w [color="black", fontcolor="black", label=""];
+cor:p3:e -> cnot1:p1:w [color="black", fontcolor="black", label=""];
+cnot1:p2:e -> cflipflop:p2:w [color="black", fontcolor="black", label=""];
+cand:p3:e -> corNot:p1:w [color="black", fontcolor="black", label=""];
+cand:p3:e -> cor:p1:w [color="black", fontcolor="black", label=""];
+rcen:e -> cnot2:p1:w [color="black", fontcolor="black", label=""];
+corNot:p3:e -> cnot:p1:w [color="black", fontcolor="black", label=""];
+rcd:e -> cmux:p2:w [color="black", fontcolor="black", label=""];
 }

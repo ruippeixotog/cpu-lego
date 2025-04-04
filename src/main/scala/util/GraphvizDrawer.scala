@@ -25,7 +25,7 @@ object GraphvizDrawer {
       portNodes.view.mapValues(_.toSeq).iterator
 
     def portHigh: Port = uf.root(High)
-    def portLow: Port = uf.root(High)
+    def portLow: Port = uf.root(Low)
 
     private def allWires(comp: Component, depth: Int): Iterator[(Port, Port)] = comp match {
       case CompositeComponent(_, components, wires, _) if depth >= 0 =>
