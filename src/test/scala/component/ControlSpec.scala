@@ -69,6 +69,11 @@ class ControlSpec extends BaseSpec {
         }
       }
     }
+    "select a single output with an empty input bus" in forAll { (enable: LogicLevel) =>
+      val (outs, sim) = buildAndRun { decoder(Vector(), enable) }
+      outs must haveLength(1)
+      sim.get(outs.head) must beSome(enable.toBool)
+    }
   }
 
   "A mux" should {
@@ -85,6 +90,11 @@ class ControlSpec extends BaseSpec {
     "throw when the input bus size and the address size do not match" in {
       val ins, sel = newBus(3)
       buildAndRun { mux(ins, sel) } must throwAn[AssertionError]
+    }
+
+    "act as a 1-to-1 multiplexer with an empty selection bus" in forAll { (in: LogicLevel) =>
+      val (out, sim) = buildAndRun { mux(Vector(in), Vector()) }
+      sim.get(out) must beSome(in.toBool)
     }
   }
 

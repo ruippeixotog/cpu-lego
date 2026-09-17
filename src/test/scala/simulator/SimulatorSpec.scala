@@ -88,5 +88,18 @@ class SimulatorSpec extends BaseSpec {
         700 -> { _.get(bus) must beSome(true) }
       )
     }
+
+    "throw on persistent bus contention" in {
+      val in1, in2, bus = newPort()
+      val (_, comp) = buildComponent {
+        switch(in1, High) ~> bus
+        switch(in2, High) ~> bus
+      }
+      Sim
+        .setup(comp)
+        .set(in1, Some(true))
+        .set(in2, Some(false))
+        .run() must throwA[Exception]("PUM")
+    }
   }
 }
