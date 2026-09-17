@@ -63,6 +63,10 @@ case class ComponentCreator(design: Design) {
     // nand(not(in1), in2)
   }
 
+  def andNot(in1: Port, in2: Port): Spec[Port] = newSpec {
+    and(in1, not(in2))
+  }
+
   private def createFromType(
       compType: String,
       parameters: Map[String, String],
@@ -72,6 +76,8 @@ case class ComponentCreator(design: Design) {
     compType match {
       case "$_AND_" =>
         Map("Y" -> and(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+      case "$_ANDNOT_" =>
+        Map("Y" -> andNot(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
       case "$_ORNOT_" =>
         Map("Y" -> orNot(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
       case "$_SR_PP_" =>

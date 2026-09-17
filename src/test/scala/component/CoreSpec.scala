@@ -137,5 +137,10 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
         }
         .run()
     }
+
+    "let the output float when enable is unset" in forAll { (in: Option[LogicLevel]) =>
+      val (out, sim) = buildAndRun { switch(in.toPort, new Port) }
+      sim.get(out) must beNone
+    }
   }
 }

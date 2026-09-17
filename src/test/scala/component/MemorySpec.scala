@@ -109,6 +109,64 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
+  "A nandLatch" should {
+
+    "start unset" in {
+      val ((q, nq), sim) = buildAndRun { nandLatch(new Port, new Port) }
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
+    }
+
+    "set q high when set is driven low" in {
+      val ((q, nq), sim) = buildAndRun { nandLatch(Low, High) }
+      sim.get(q) must beSome(true)
+      sim.get(nq) must beSome(false)
+    }
+
+    "set q low when reset is driven low" in {
+      val ((q, nq), sim) = buildAndRun { nandLatch(High, Low) }
+      sim.get(q) must beSome(false)
+      sim.get(nq) must beSome(true)
+    }
+
+    "retain its value when both inputs are released" in {
+      val set, reset = newPort()
+      val ((q, nq), comp) = buildComponent { nandLatch(set, reset) }
+
+      runPlan(
+        comp,
+        10 -> { _.set(set, Some(true)).set(reset, Some(true)) },
+        20 -> { st => st.get(q) must beNone },
+        30 -> { _.set(set, Some(false)) },
+        40 -> { st => (st.get(q) must beSome(true)) and (st.get(nq) must beSome(false)) },
+        50 -> { _.set(set, Some(true)) },
+        60 -> { st => st.get(q) must beSome(true) },
+        70 -> { _.set(reset, Some(false)) },
+        80 -> { st => (st.get(q) must beSome(false)) and (st.get(nq) must beSome(true)) },
+        90 -> { _.set(reset, Some(true)) },
+        100 -> { st => st.get(q) must beSome(false) }
+      )
+    }
+  }
+
+  "A buffered" should {
+
+    "pass the bus through when enable is High" in forAll { (ins: Vector[LogicLevel]) =>
+      val (outs, sim) = buildAndRun { buffered(High)(ins) }
+      sim.get(outs).sequence must beSome(ins.map(_.toBool))
+    }
+
+    "leave the bus floating when enable is Low" in forAll { (ins: Vector[LogicLevel]) =>
+      val (outs, sim) = buildAndRun { buffered(Low)(ins) }
+      foreach(outs) { out => sim.get(out) must beNone }
+    }
+
+    "leave the bus floating when enable is unset" in forAll { (ins: Vector[LogicLevel]) =>
+      val (outs, sim) = buildAndRun { buffered(new Port)(ins) }
+      foreach(outs) { out => sim.get(out) must beNone }
+    }
+  }
+
   "A dLatch" should {
 
     "start unset" in {
@@ -312,9 +370,19 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .run()
       }
     }
+
+    "be empty for an empty input bus" in {
+      val (outs, _) = buildAndRun { register(Vector(), Low, Low) }
+      outs must beEmpty
+    }
   }
 
   "A counter" should {
+
+    "be empty for a zero width" in {
+      val (outs, _) = buildAndRun { counter(0, High, Low, High) }
+      outs must beEmpty
+    }
 
     "count the number of clock cycles when count is High" in {
       val clear = newPort()
@@ -360,6 +428,11 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           }
           .run()
       }
+    }
+
+    "be empty for an empty preset bus" in {
+      val (outs, _) = buildAndRun { presettableCounter(Vector(), Low, Low, High) }
+      outs must beEmpty
     }
   }
 
@@ -442,6 +515,21 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           .run()
       }
     }
+
+    "address a single word with an empty address bus" in {
+      val ins = newBus(4)
+      val we, ce = newPort()
+      val (outs, comp) = buildComponent { ram(ins, Vector(), we, ce) }
+      outs must haveLength(4)
+
+      runPlan(
+        comp,
+        10 -> { _.set(we, true).set(ce, true).set(ins, Seq(true, false, true, false)) },
+        50 -> { st => st.get(outs).sequence must beSome(Vector(true, false, true, false)) },
+        60 -> { _.set(ce, false) },
+        100 -> { st => foreach(st.get(outs)) { _ must beNone } }
+      )
+    }
   }
 
   "A ROM" should {
@@ -464,6 +552,25 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
             .run()
         }
       }
+    }
+
+    "throw when data and address bus sizes do not match" in {
+      val addr = newBus(2)
+      buildAndRun { rom(Seq(Seq(true)), addr) } must throwAn[AssertionError]
+    }
+
+    "throw when a data entry has the wrong size" in {
+      // there is no explicit assertion for this; the ragged data fails
+      // inside `transpose` with a clear error
+      val addr = newBus(1)
+      buildAndRun { rom(Seq(Seq(true), Seq(true, false)), addr) } must throwA[IllegalArgumentException]
+    }
+
+    "read a single word with an empty address bus" in {
+      val data = Seq(Seq(true, false, true))
+      val (outs, sim) = buildAndRun { rom(data, Vector()) }
+      outs must haveLength(3)
+      sim.get(outs).sequence must beSome(Vector(true, false, true))
     }
   }
 }

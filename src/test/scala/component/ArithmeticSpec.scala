@@ -38,6 +38,22 @@ class ArithmeticSpec extends BaseSpec {
         bools.toInt must beEqualTo(in1.toInt + in2.toInt)
       }
     }
+
+    "compute an addition with carry in correctly" in forAll {
+      (ins: Vector[(LogicLevel, LogicLevel)], carryIn: LogicLevel) =>
+        val (in1, in2) = ins.unzip
+        val ((outs, carryOut), sim) = buildAndRun { binaryAdder(in1, in2, carryIn) }
+
+        sim.get(outs :+ carryOut).sequence must beSome.which { bools =>
+          bools.toInt must beEqualTo(in1.toInt + in2.toInt + carryIn.toInt)
+        }
+    }
+
+    "pass the carry through on empty buses" in forAll { (carryIn: LogicLevel) =>
+      val ((outs, carryOut), sim) = buildAndRun { binaryAdder(Vector(), Vector(), carryIn) }
+      outs must beEmpty
+      sim.get(carryOut) must beSome(carryIn.toBool)
+    }
   }
 
   "An addSub" should {
