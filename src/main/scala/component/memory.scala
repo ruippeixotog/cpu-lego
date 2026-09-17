@@ -7,8 +7,8 @@ import core.*
   */
 def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
-  val q = nand(reset, aux1)
-  val nq = nand(set, aux2)
+  val q = nand(set, aux1)
+  val nq = nand(reset, aux2)
   q ~> aux2
   nq ~> aux1
   (q, nq)
