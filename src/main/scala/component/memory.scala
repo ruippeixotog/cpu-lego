@@ -3,12 +3,14 @@ package component
 import component.BuilderAPI.*
 import core.*
 
-/** An active-low SR latch built from two cross-coupled NAND gates (page 92).
+/** Textbook active-low SR latch: two NAND gates wired in a loop (page 92).
   *
-  * `set` and `reset` are active-low: holding `set` Low drives `q` High, holding `reset` Low drives `q` Low.
-  * Holding both High retains the previous value. Driving both Low is the forbidden state (both outputs go High)
-  * and must be avoided; the latch is only guaranteed to settle correctly when its inputs change one at a time
-  * (fundamental mode).
+  * This is the raw memory cell everything else is built from. It is not safe to use directly: driving both
+  * inputs Low is forbidden (both outputs go High, and releasing them together can leave the latch oscillating
+  * instead of settling). Its inputs must also change one at a time.
+  *
+  * Academic building block — use [[latchClocked]] (which adds clock gating and override priority) or [[dLatch]]
+  * instead.
   */
 def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
@@ -19,12 +21,10 @@ def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   (q, nq)
 }
 
-/** An active-high SR latch built from two cross-coupled NOR gates (which are themselves built from NAND gates).
+/** Textbook active-high SR latch: two NOR gates wired in a loop (the NORs are themselves built from NANDs).
   *
-  * `set` and `reset` are active-high: holding `set` High drives `q` High, holding `reset` High drives `q` Low.
-  * Holding both Low retains the previous value. Driving both High is the forbidden state (both outputs go Low)
-  * and must be avoided; the latch is only guaranteed to settle correctly when its inputs change one at a time
-  * (fundamental mode).
+  * Same warning as [[nandLatch]]: driving both inputs High is forbidden. Academic building block — used here
+  * only as the Yosys `$_SR_PP_` cell mapping. Prefer [[latchClocked]] or [[dLatch]].
   */
 def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
@@ -35,20 +35,15 @@ def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   (q, nq)
 }
 
-/** A flip-flop with positive (level) clocking as well as asynchronous, active low `clear` and `preset` signals (pages
-  * 94 and 97).
+/** Recommended low-level storage primitive: a clocked SR latch with asynchronous overrides (pages 94, 97).
   *
-  * Built from a [[nandLatch]] whose active-low pins are driven by the clocked data path. The `or(not(clear), ...)`
-  * terms give the asynchronous signals priority over the data path: without them, asserting `clear` (or `preset`)
-  * while the data path is active would drive both latch pins Low, hitting the forbidden state.
+  * While `clk` is High the latch follows `set`/`reset`; while Low it holds its value. The active-low `clear`
+  * and `preset` override everything at any time: `clear` forces the output Low, `preset` forces it High
+  * (`clear` wins if both are pressed). A priority circuit in front of the raw [[nandLatch]] makes sure it never
+  * sees the forbidden "both Low" combination, no matter what the overrides do.
   *
-  * The `or` structure keeps async transitions monotonic in the common case: `and(preset, nand(set, clk))` does not
-  * depend on `clear`, so when only `clear` changes, only the `not(clear)` term moves. If `set`/`clk` change at the
-  * same instant as `clear`, a glitch is possible — async inputs must respect recovery/removal times.
-  *
-  * Contract (same as the physical 7475): do not drive `set` and `reset` High together while `clk` is High, and do
-  * not drive `clear` and `preset` Low together. Inputs must change one at a time (fundamental mode) for the
-  * underlying NAND latch to settle deterministically.
+  * Contract: do not drive `set` and `reset` High together while `clk` is High; do not drive `clear` and
+  * `preset` Low together; change inputs one at a time.
   */
 def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
   newSpec {
@@ -58,18 +53,16 @@ def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: 
     )
   }
 
-/** Non-overlapping two-phase clock generator for master-slave flip-flops.
+/** Splits the clock into two phase signals for master-slave flip-flops.
   *
-  * Produces `(clkM, clkS)` where `clkM` is High while `clk` is Low (master phase) and `clkS` is High while `clk`
-  * is High (slave phase). Each phase's rising edge is delayed by two gate delays via `and(x, not(not(x)))`, while
-  * its falling edge follows the input directly. On a rising `clk`, the master phase falls promptly (master
-  * closes) and the slave phase rises only after the delay (slave opens); on a falling `clk`, the reverse holds.
+  * Produces `(clkM, clkS)`: `clkM` is High while `clk` is Low (the master latch may read its input), `clkS` is
+  * High while `clk` is High (the slave latch may read the master). Each phase turns on a little later than the
+  * other turns off, so the master is fully closed before the slave opens, and vice versa. The two latches are
+  * therefore never open at the same time — without this, input data could shoot straight through both latches
+  * within a single clock phase and the flip-flop would stop behaving as edge-triggered.
   *
-  * Design intent: the closing latch shuts before the other opens (break-before-make), so the two latches of a
-  * master-slave pair are not transparent simultaneously under the nominal delay model (positive gate delays,
-  * the delayed path strictly slower than the direct path). This has been analyzed for the nominal topology but
-  * is not formally proven against process variation or the simulator's exact event scheduling; it is an
-  * experimental structure. If the non-overlap fails, a combinational loop can form through the pair.
+  * The "one closes before the other opens" ordering holds for any positive gate/wire delays: the turn-on path
+  * passes through strictly more gates than the turn-off path, so it is strictly slower.
   */
 def nonOverlapClock(clk: Port): Spec[(Port, Port)] = newSpec {
   val clkM = and(not(clk), not(not(not(clk))))
@@ -77,54 +70,42 @@ def nonOverlapClock(clk: Port): Spec[(Port, Port)] = newSpec {
   (clkM, clkS)
 }
 
-/** A positive edge triggered D flip-flop with asynchronous signals (pages 96).
+/** Recommended flip-flop: captures `in` on the rising edge of `clk` (page 96).
   *
-  * Master-slave structure built from two [[latchClocked]]s driven by [[nonOverlapClock]] phases: the master is
-  * transparent while `clk` is Low and captures `in`; the slave is transparent while `clk` is High and captures
-  * the master, so `q` only changes on the rising edge. The non-overlapping phases are intended to ensure the
-  * master closes before the slave opens (and vice versa), avoiding the transparency overlap that would allow
-  * race-around.
+  * Two [[latchClocked]]s in series (master and slave), driven by the two phases of [[nonOverlapClock]]. The
+  * master reads `in` while the clock is Low; on the rising edge the master closes and the slave opens, copying
+  * the master to the output. Because the phases never overlap, the output only changes on the rising edge.
   *
-  * Complement skew: `in`/`not(in)` (and `qm`/`not(qm)`) arrive at different times, transiently exposing the
-  * forbidden latch input combination. This is contained because the skew occurs while the downstream latch is
-  * opaque (the master skews while the slave is closed, and vice versa), so the transient does not propagate —
-  * provided the upstream latch has settled before the downstream opens, i.e. inputs respect setup/hold around
-  * the closing edge. If setup/hold is violated, the latch can enter metastability like any bistable; this
-  * design does not eliminate metastability, it provides the standard synchronous timing contract.
+  * The active-low `clear`/`preset` override at any time (`clear` wins if both are pressed); they reach both
+  * latches, so no stale value survives in the master.
   *
-  * The asynchronous `clear`/`preset` go to both latches: otherwise the master would retain stale state and corrupt
-  * the slave when the asynchronous signal is released.
-  *
-  * Timing contract: `in` must be stable for setup/hold around the rising edge of `clk`; `clk` high/low phases
-  * must exceed the latch propagation delay plus the phase-generator dead time; async `clear`/`preset` require
-  * recovery/removal around the clock edge. No unconditional guarantee is made — see [[nonOverlapClock]] for
-  * the experimental status of the phase generator.
+  * Timing contract: keep `in` stable around the rising clock edge; keep the clock slow enough for all signals
+  * to settle between edges; do not toggle `clear` and `preset` at the same instant.
   */
 def dLatch(in: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] = newSpec {
   val (clkM, clkS) = nonOverlapClock(clk)
   dLatchWithPhases(in, clkM, clkS, clear, preset)
 }
 
-/** A D flip-flop taking pre-generated non-overlapping phases (for sharing one generator across many bits). */
+/** Same as [[dLatch]], but takes the two phase signals from a shared [[nonOverlapClock]] instead of building its
+  * own. Use this when many flip-flops share one clock (e.g. [[ringCounter]]) so there is only one phase
+  * generator instead of one per bit.
+  */
 def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
   newSpec {
     val (qm, _) = latchClocked(in, not(in), clkM, clear, preset)
     latchClocked(qm, not(qm), clkS, clear, preset)
   }
 
-/** A positive edge triggered JK flip-flop with asynchronous `clear` (page 99).
+/** Recommended JK flip-flop, for counters (page 99).
   *
-  * Master-slave structure driven by [[nonOverlapClock]] phases: the master captures `j`/`k` (gated by the slave's
-  * feedback) while `clk` is Low; the slave captures the master while `clk` is High. The feedback comes from the
-  * slave, which only changes while the master is opaque (under the non-overlap intent), avoiding race-around.
-  * The master's inputs `j & ~q` and `k & q` cannot both be High when the slave outputs are settled complementary;
-  * transient skew is contained by the opaque phase as in [[dLatch]], subject to the same setup/hold contract.
+  * Master-slave structure like [[dLatch]]: the master reads `j`/`k` (combined with the slave's feedback) while
+  * the clock is Low, the slave copies the master while the clock is High. `j=1, k=0` sets, `j=0, k=1` resets,
+  * `j=k=1` toggles. The feedback comes from the slave, which only changes while the master is closed, so the
+  * output cannot race around within one clock phase.
   *
-  * The asynchronous `clear`/`preset` go to both latches: otherwise the master would retain stale state and corrupt
-  * the slave when the asynchronous signal is released.
-  *
-  * Timing contract: as for [[dLatch]] — `j`/`k` need setup/hold around the rising edge, phases must exceed
-  * latch delay plus dead time, async signals need recovery/removal. No unconditional metastability guarantee.
+  * Same timing contract as [[dLatch]]: `j`/`k` stable around the rising edge, slow enough clock, and do not
+  * toggle `clear`/`preset` at the same instant.
   */
 def jkFlipFlop(j: Port, k: Port, clk: Port, clear: Port, preset: Port = High): Spec[(Port, Port)] = newSpec {
   val (clkM, clkS) = nonOverlapClock(clk)
