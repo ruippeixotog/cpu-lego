@@ -82,13 +82,6 @@ object GraphvizDrawer {
             portMap.add(out, Direction.Output, s"$cName:p3")
             addRecordNode(cName, "<p1> in1|<p2> in2", s"$name\\nNAND", "<p3> out")
 
-          case FlipFlop(set, reset, q, nq) =>
-            portMap.add(set, Direction.Input, s"$cName:p1")
-            portMap.add(reset, Direction.Input, s"$cName:p2")
-            portMap.add(q, Direction.Output, s"$cName:p3")
-            portMap.add(nq, Direction.Output, s"$cName:p4")
-            addRecordNode(cName, "<p1> set|<p2> reset", s"$name\\nFlipFlop", "<p3> q|<p4> nq")
-
           case Clock(_, out) =>
             portMap.add(out, Direction.Input, s"$cName:p1")
             addRecordNode(cName, "", s"$name\nClock", "<p1> out")

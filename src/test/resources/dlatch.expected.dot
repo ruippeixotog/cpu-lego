@@ -7,27 +7,29 @@ rankdir="LR";
 remincross=true;
 label="test_dlatch";
 cmux [ shape=record, label="{{<p1> ins[0]|<p2> ins[1]|<p3> sel[0]}|mux|{<p4> out}}", color="black", fontcolor="black"];
+// No dir for port norLatch in component cnorLatch
+// No dir for port norLatch in component cnorLatch
+cnorLatch [ shape=record, label="{{<p3> reset|<p5> set}|norLatch|{<p1> out2|<p4> out1}}", color="black", fontcolor="black"];
 cor [ shape=record, label="{{<p1> in1|<p2> in2}|or|{<p3> out}}", color="black", fontcolor="black"];
 cnot [ shape=record, label="{{<p1> in}|not|{<p2> out}}", color="black", fontcolor="black"];
-cflipflop [ shape=record, label="{{<p1> set|<p2> reset}|flipflop|{<p3> out1|<p4> out2}}", color="black", fontcolor="black"];
 cnot1 [ shape=record, label="{{<p1> in}|not$1|{<p2> out}}", color="black", fontcolor="black"];
 corNot [ shape=record, label="{{<p1> in1|<p2> in2}|orNot|{<p3> out}}", color="black", fontcolor="black"];
 cnot2 [ shape=record, label="{{<p1> in}|not$2|{<p2> out}}", color="black", fontcolor="black"];
 cand [ shape=record, label="{{<p1> in1|<p2> in2}|and|{<p3> out}}", color="black", fontcolor="black"];
-// Port not connected: cflipflop:p4
 cnot2:p2:e -> cand:p2:w [color="black", fontcolor="black", label=""];
-cflipflop:p3:e -> rcq:w [color="black", fontcolor="black", label=""];
-cmux:p4:e -> cor:p2:w [color="black", fontcolor="black", label=""];
-cmux:p4:e -> corNot:p2:w [color="black", fontcolor="black", label=""];
+cnot1:p2:e -> cnorLatch:p3:w [color="black", fontcolor="black", label=""];
+cand:p3:e -> cor:p1:w [color="black", fontcolor="black", label=""];
+cand:p3:e -> corNot:p1:w [color="black", fontcolor="black", label=""];
+cnot:p2:e -> cnorLatch:p5:w [color="black", fontcolor="black", label=""];
+rcen:e -> cnot2:p1:w [color="black", fontcolor="black", label=""];
+cor:p3:e -> cnot1:p1:w [color="black", fontcolor="black", label=""];
+rcd:e -> cmux:p2:w [color="black", fontcolor="black", label=""];
+corNot:p3:e -> cnot:p1:w [color="black", fontcolor="black", label=""];
 rcrstn:e -> cmux:p3:w [color="black", fontcolor="black", label=""];
 rcrstn:e -> cand:p1:w [color="black", fontcolor="black", label=""];
+// Port not connected: cnorLatch:p1
+cmux:p4:e -> corNot:p2:w [color="black", fontcolor="black", label=""];
+cmux:p4:e -> cor:p2:w [color="black", fontcolor="black", label=""];
 kcmux_p1 [ label="1'0" ];kcmux_p1 -> cmux:p1 [color="black", fontcolor="black", label=""];
-cnot:p2:e -> cflipflop:p1:w [color="black", fontcolor="black", label=""];
-cor:p3:e -> cnot1:p1:w [color="black", fontcolor="black", label=""];
-cnot1:p2:e -> cflipflop:p2:w [color="black", fontcolor="black", label=""];
-cand:p3:e -> corNot:p1:w [color="black", fontcolor="black", label=""];
-cand:p3:e -> cor:p1:w [color="black", fontcolor="black", label=""];
-rcen:e -> cnot2:p1:w [color="black", fontcolor="black", label=""];
-corNot:p3:e -> cnot:p1:w [color="black", fontcolor="black", label=""];
-rcd:e -> cmux:p2:w [color="black", fontcolor="black", label=""];
+cnorLatch:p4:e -> rcq:w [color="black", fontcolor="black", label=""];
 }

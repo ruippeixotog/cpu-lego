@@ -19,7 +19,8 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
       onStartFunc: Sim => Unit = _ => {},
       beforeActionFuncs: Seq[BeforeActionFunc] = Vector(),
       onActionFuncs: Seq[ActionFunc] = Vector(),
-      checkFunc: Sim => Result = _ => ok
+      checkFunc: Sim => Result = _ => ok,
+      actionFilter: (Sim, Port, Boolean) => Boolean = (_, _, _) => true
   ) {
 
     def withPorts(ports: Port | Bus | (Port, Boolean) | (Bus, Boolean)*) = {
@@ -57,6 +58,16 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
 
     def check(f: Sim => Result) = copy(checkFunc = f)
 
+    /** Skip actions that would violate the DUT's timing contract.
+      *
+      * The filter is evaluated before each generated action; if it returns false,
+      * the action is not applied to the simulator. This enforces the timing
+      * contract (e.g. data stable while the master latch is transparent) that the
+      * DUT requires for correct operation. Note: this weakens ScalaCheck shrinking
+      * for the filtered actions, as the shrinker cannot see through the filter.
+      */
+    def withActionFilter(f: (Sim, Port, Boolean) => Boolean) = copy(actionFilter = f)
+
     def run(): Prop = {
       given Arbitrary[Port] = Arbitrary(Gen.oneOf(ports.map(_._1)))
 
@@ -73,13 +84,15 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
       onStartFunc(sim)
 
       foreach(actions) { case (port, newVal) =>
-        val oldVal = sim.get(port)
-        beforeActionFuncs.foreach { f => sim = f(sim, port, newVal, oldVal) }
+        if (actionFilter(sim, port, newVal)) {
+          val oldVal = sim.get(port)
+          beforeActionFuncs.foreach { f => sim = f(sim, port, newVal, oldVal) }
 
-        sim = sim.set(port, Some(newVal)).run()
+          sim = sim.set(port, Some(newVal)).run()
 
-        onActionFuncs.foreach(_(sim, port, newVal, oldVal))
-        checkFunc(sim)
+          onActionFuncs.foreach(_(sim, port, newVal, oldVal))
+          checkFunc(sim)
+        }
       }
     }
   }
