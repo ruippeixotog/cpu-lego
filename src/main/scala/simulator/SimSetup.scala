@@ -18,19 +18,6 @@ object SimSetup {
           case _ => None
         }
 
-      case (sim, FlipFlop(set, reset, q, nq)) =>
-        def propagate(s: Sim): Sim = {
-          val res = (s.get(set), s.get(reset)) match {
-            case (Some(true), Some(false)) => Some(true)
-            case (Some(false), Some(true)) => Some(false)
-            case _ => None
-          }
-          res.fold(s) { v =>
-            s.setAfter(gateDelay, q, v).setAfter(gateDelay, nq, !v)
-          }
-        }
-        sim.watch(set)(propagate).watch(reset)(propagate)
-
       case (sim, Clock(freq, out)) =>
         sim.set(out, true).watch(out)(_.toggleAfter(freq, out))
 

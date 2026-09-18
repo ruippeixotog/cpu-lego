@@ -13,18 +13,6 @@ def nand(in1: Port, in2: Port): Spec[Port] = newSpec {
   out
 }
 
-/** A set/reset type flip-flop (https://en.wikipedia.org/wiki/Flip-flop_(electronics)).
-  *
-  * Other type of latches can be found in `memory.scala`.
-  */
-def flipflop(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
-  val _set, _reset, q, nq = new Port()
-  summon[BuilderEnv].add("impl", FlipFlop(_set, _reset, q, nq))
-  set ~> _set
-  reset ~> _reset
-  (q, nq)
-}
-
 /** A clock signal (https://en.wikipedia.org/wiki/Clock_signal).
   */
 def clock(freq: Int): Spec[Port] = newSpec {
