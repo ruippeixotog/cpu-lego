@@ -6,7 +6,7 @@ import component.BuilderAPI.*
 import core.*
 import org.scalacheck.Prop
 import org.scalacheck.Prop.forAll
-import simulator.Sim
+import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
@@ -48,13 +48,13 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
     s"$desc" should {
       "start unset" in {
         val (q, comp) = buildComponent { dLatch(cc, new Port(), new Port(), new Port()) }
-        val sim = Sim.setupAndRun(comp, Some(1000))
+        val sim = GateProcessor.setupAndRun(comp, Some(1000))
         sim.get(q) must beNone
       }
 
       "be set to the input when enable is high" in forAll { (in: LogicLevel) =>
         val (q, comp) = buildComponent { dLatch(cc, in, High, High) }
-        val sim = Sim.setupAndRun(comp, Some(1000))
+        val sim = GateProcessor.setupAndRun(comp, Some(1000))
         sim.get(q) must beSome(in.toBool)
       }
 

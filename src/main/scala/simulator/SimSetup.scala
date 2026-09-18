@@ -4,8 +4,8 @@ import core.*
 
 object SimSetup {
 
-  def setup(c: Circuit): Sim = {
-    val sim = Sim(c).set(High, true).set(Low, false)
+  def setup(c: Circuit, conf: Config = Config.default): GateProcessor = {
+    val sim = GateProcessor(c, conf).set(High, true).set(Low, false)
     import sim.conf._
 
     c.components.foldLeft(sim) {
@@ -19,7 +19,7 @@ object SimSetup {
         }
 
       case (sim, FlipFlop(set, reset, q, nq)) =>
-        def propagate(s: Sim): Sim = {
+        def propagate(s: GateProcessor): GateProcessor = {
           val res = (s.get(set), s.get(reset)) match {
             case (Some(true), Some(false)) => Some(true)
             case (Some(false), Some(true)) => Some(false)
@@ -42,11 +42,11 @@ object SimSetup {
     }
   }
 
-  private def binaryOp(sim: Sim, port1: Port, port2: Port, out: Port, delay: Int)(
+  private def binaryOp(sim: GateProcessor, port1: Port, port2: Port, out: Port, delay: Int)(
       f: (Option[Boolean], Option[Boolean]) => Option[Boolean]
-  ): Sim = {
+  ): GateProcessor = {
 
-    def propagate(s: Sim): Sim =
+    def propagate(s: GateProcessor): GateProcessor =
       s.setAfter(delay, out, f(s.get(port1), s.get(port2)))
 
     sim.watch(port1)(propagate).watch(port2)(propagate)

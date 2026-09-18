@@ -4,7 +4,7 @@ import component.BuilderAPI.*
 import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
-import simulator.Sim
+import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
@@ -21,7 +21,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { latchClocked(new Port, new Port, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(1000))
+      val sim = GateProcessor.setupAndRun(comp, Some(1000))
       sim.get(q) must beNone
       sim.get(nq) must beNone
     }
@@ -60,7 +60,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val set, reset = new Port
       val ((q, nq), comp) = buildComponent { latchClocked(set, reset, clock(100)) }
 
-      def setInputs(s: Boolean, r: Boolean)(sim: Sim) =
+      def setInputs(s: Boolean, r: Boolean)(sim: GateProcessor) =
         sim.set(set, s).set(reset, r)
 
       runPlan(
@@ -171,14 +171,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { dLatch(new Port, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(1000))
+      val sim = GateProcessor.setupAndRun(comp, Some(1000))
       sim.get(q) must beNone
       sim.get(nq) must beNone
     }
 
     "be set to the input on positive edge trigger" in forAll { (in: LogicLevel) =>
       val ((q, nq), comp) = buildComponent { dLatch(in, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(250))
+      val sim = GateProcessor.setupAndRun(comp, Some(250))
       sim.get(q) must beSome(in.toBool)
       sim.get(nq) must beSome(!in.toBool)
     }
@@ -224,7 +224,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "start unset" in {
       val ((q, nq), comp) = buildComponent { jkFlipFlop(new Port, new Port, clock(100), High) }
-      val sim = Sim.setupAndRun(comp, Some(1000))
+      val sim = GateProcessor.setupAndRun(comp, Some(1000))
       sim.get(q) must beNone
       sim.get(nq) must beNone
     }
@@ -233,7 +233,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val j, k, clear = newPort()
       val ((q, nq), comp) = buildComponent { jkFlipFlop(j, k, clock(100), clear) }
 
-      def setInput(set: Boolean, reset: Boolean)(sim: Sim) =
+      def setInput(set: Boolean, reset: Boolean)(sim: GateProcessor) =
         sim.set(j, set).set(k, reset)
 
       runPlan(
@@ -285,7 +285,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "start unset" in forAll(Gen.choose(1, 20)) { n =>
       val ins = newBus(n)
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(1000))
+      val sim = GateProcessor.setupAndRun(comp, Some(1000))
       foreach(outs) { out => sim.get(out) must beNone }
     }
 
@@ -296,13 +296,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "remain unset while load is Low" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, Low, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(1000))
+      val sim = GateProcessor.setupAndRun(comp, Some(1000))
       foreach(outs) { out => sim.get(out) must beNone }
     }
 
     "be set to the input on clock positive edge when load is High" in forAll { (ins: Vector[LogicLevel]) =>
       val (outs, comp) = buildComponent { register(ins, High, clock(100)) }
-      val sim = Sim.setupAndRun(comp, Some(250))
+      val sim = GateProcessor.setupAndRun(comp, Some(250))
       sim.get(outs).sequence must beSome.which { bools =>
         bools must beEqualTo(ins.map(_.toBool))
       }
@@ -318,7 +318,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val load = newPort()
       val (outs, comp) = buildComponent { register(ins, load, clock(100)) }
 
-      def setInputs(load0: Boolean, ins0: List[Boolean])(sim: Sim) = {
+      def setInputs(load0: Boolean, ins0: List[Boolean])(sim: GateProcessor) = {
         val st0 = sim.set(load, load0)
         ins.zip(ins0).foldLeft(st0) { case (st, (port, v)) => st.set(port, v) }
       }
@@ -389,7 +389,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val (outs, comp) = buildComponent { counter(2, High, clock(100), clear) }
       outs must haveLength(2)
 
-      def getOutAsInt(sim: Sim): Option[Int] =
+      def getOutAsInt(sim: GateProcessor): Option[Int] =
         sim.get(outs).sequence.map(_.toInt)
 
       runPlan(
@@ -500,7 +500,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         var mem: Array[Vector[Option[Boolean]]] = Array.fill(1 << addrN)(Vector.fill(inN)(None))
 
-        def addrIdx(sim: Sim) = sim.get(addr).sequence.get.toInt
+        def addrIdx(sim: GateProcessor) = sim.get(addr).sequence.get.toInt
 
         SequentialScenario(comp)
           .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
@@ -542,7 +542,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
           val (outs, comp) = buildComponent { rom(data, addr) }
           outs must haveLength(data.head.length)
 
-          def addrIdx(sim: Sim) = sim.get(addr).sequence.get.toInt
+          def addrIdx(sim: GateProcessor) = sim.get(addr).sequence.get.toInt
 
           SequentialScenario(comp)
             .withPorts(addr -> false)

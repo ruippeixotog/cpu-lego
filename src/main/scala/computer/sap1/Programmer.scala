@@ -10,7 +10,7 @@ type MemEntry = Instr | Data
 
 object Programmer {
 
-  def load(sim: Sim, ramIn: Input, prog: List[MemEntry], addr: Int = 0): Sim = {
+  def load(sim: GateProcessor, ramIn: Input, prog: List[MemEntry], addr: Int = 0): GateProcessor = {
     prog match {
       case entry :: rest =>
         val sim1 = sim

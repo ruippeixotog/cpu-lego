@@ -1,140 +1,101 @@
 package simulator
 
-import scala.annotation.tailrec
-import scala.collection.immutable.TreeMap
+import java.util.concurrent.LinkedBlockingQueue
 
 import core.*
-import util.UnionFind
 
-import Sim.Event.*
+/** A change in a port's effective value, as observed on a live [[Sim]].
+  *
+  * Deliberately not tick-stamped: peripherals see ports, never the simulator's clock — if the simulation lags behind
+  * the wall clock, peripherals lag in kind, exactly like real hardware.
+  *
+  * @param port
+  *   the port whose value changed
+  * @param value
+  *   the port's new effective value, as read by `get`
+  */
+final case class PortUpdate(port: Port, value: Option[Boolean])
 
-object Sim {
+/** A live simulator: a running simulation that peripherals drive and observe.
+  *
+  * A Sim is the seam between the outside world and any simulation implementation: the reference gate-level [[RefSim]],
+  * a future backend that compiles the gate graph to native code, an FPGA driver, and so on. All interaction with a
+  * running simulation goes through this interface; what an implementation does with the gates internally is opaque.
+  *
+  * The contract is deliberately small, modeling what a real peripheral can do: drive wires, read wires, and react to
+  * wire changes. There is no tick and no stepping — a peripheral cannot ask a real CPU for its current cycle, and
+  * neither can it ask a Sim.
+  *
+  * All methods are safe to call from any thread. Implementations must document their execution model: when the
+  * simulation advances, whether it can stop on its own, and what `start`/`stop` mean.
+  */
+trait Sim {
 
-  enum Event {
-    case PortChange(port: Port, value: Option[Boolean])
-    case PortGroupDrive(group: PortGroup)
-    case PortGroupCheck(group: PortGroup)
-  }
+  /** Start the simulation. Throws IllegalStateException if already running.
+    */
+  def start(): Unit
 
-  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): Sim =
-    SimSetup.setup(Circuit(root, extraWires))
+  /** Ask a running simulation to stop. Safe to call when not running. */
+  def stop(): Unit
 
-  inline def setupAndRun(root: Component, maxTicks: Option[Int] = None): Sim =
-    setup(root).run(maxTicks)
+  /** Whether the simulation is currently running. */
+  def isRunning: Boolean
+
+  /** Drive the port to `value`; `None` releases it. */
+  def set(port: Port, value: Option[Boolean]): Unit
+
+  /** Drive the port to `value`. */
+  def set(port: Port, value: Boolean): Unit = set(port, Some(value))
+
+  /** Release the port (equivalent to driving `None`). */
+  def unset(port: Port): Unit = set(port, None)
+
+  /** Drive every port of the bus. All drives are applied together.
+    */
+  def set(bus: Bus, values: Seq[Boolean]): Unit
+
+  /** The port's effective value in the last published state: the last driven value, else its wire-group value, else
+    * None.
+    */
+  def get(port: Port): Option[Boolean]
+
+  /** The effective value of every port of the bus. */
+  def get(bus: Bus): Vector[Option[Boolean]]
+
+  /** Run `callback` on every effective-value change of the port. Callbacks run sequentially on a notifier thread, in
+    * simulation order. A callback must return quickly and must not throw (exceptions are reported and ignored). It may
+    * drive inputs with [[set]]/[[unset]], but must not call [[start]] or [[stop]].
+    *
+    * @return
+    *   an AutoCloseable that unregisters the callback
+    */
+  def watch(port: Port)(callback: PortUpdate => Unit): AutoCloseable
+
+  /** Subscribe to effective-value changes of the port. Each change is delivered exactly once, in simulation order. Poll
+    * the returned subscription from any thread.
+    */
+  def subscribe(port: Port): PollSubscription
 }
 
-final case class Sim(
-    c: Circuit,
-    conf: Config = Config.default,
-    private val t: Long = 0,
-    private val events: TreeMap[Long, Vector[Sim.Event]] = TreeMap(),
-    private val portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
-    private val portObservers: Map[Port, List[Sim => Sim]] = Map().withDefaultValue(Nil),
-    private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
-) {
+/** A pollable subscription to a port's value changes, as returned by [[Sim.subscribe]].
+  */
+final class PollSubscription private[simulator] (
+    val port: Port,
+    private val queue: LinkedBlockingQueue[PortUpdate],
+    private val onClose: () => Unit
+) extends AutoCloseable {
 
-  private def schedule(after: Long, ev: Sim.Event): Sim =
-    copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
-
-  inline def tick = t
-
-  def get(port: Port): Option[Boolean] =
-    portValues(port).orElse(groupValues(c.groupOf(port)))
-
-  inline def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get)
-  inline def isLow(port: Port): Boolean = get(port) == Some(false)
-  inline def isHigh(port: Port): Boolean = get(port) == Some(true)
-
-  def set(port: Port, newValue: Option[Boolean]): Sim =
-    schedule(0, PortChange(port, newValue))
-
-  inline def set(port: Port, newValue: Boolean): Sim = set(port, Some(newValue))
-  inline def unset(port: Port): Sim = set(port, None)
-  inline def toggle(port: Port): Sim = set(port, get(port).map(!_))
-
-  def set(bus: Bus, newValue: Seq[Boolean]): Sim =
-    bus.zip(newValue).foldLeft(this) { case (sim1, (p, v)) => sim1.set(p, v) }
-
-  def setAfter(after: Long, port: Port, newValue: Option[Boolean]): Sim =
-    schedule(after, PortChange(port, newValue))
-
-  inline def setAfter(after: Long, port: Port, newValue: Boolean): Sim = setAfter(after, port, Some(newValue))
-  inline def unsetAfter(after: Long, port: Port): Sim = setAfter(after, port, None)
-  inline def toggleAfter(after: Long, port: Port): Sim = setAfter(after, port, get(port).map(!_))
-
-  def watch(port: Port)(callback: Sim => Sim): Sim =
-    copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
-
-  @tailrec def run(maxTicks: Option[Int] = None): Sim =
-    step(maxTicks) match {
-      case None => this
-      case Some(next) => next.run(maxTicks)
+  /** All updates delivered since the last poll, in delivery order. */
+  def poll(): List[PortUpdate] = {
+    val b = List.newBuilder[PortUpdate]
+    var u = queue.poll()
+    while (u != null) {
+      b += u
+      u = queue.poll()
     }
-
-  def step(maxTicks: Option[Int] = None): Option[Sim] = {
-    if (events.isEmpty) return None
-
-    val (t1, evs) = events.head
-    if (maxTicks.exists(t1 > _)) return None
-
-    val sortedEvs = evs.sortBy {
-      case PortGroupDrive(_) => 1
-      case PortChange(_, _) => 2
-      case PortGroupCheck(_) => 3
-    }
-    Some(copy(t = t1, events = events.tail).processEvents(sortedEvs))
+    b.result()
   }
 
-  private def processEvents(evs: Seq[Sim.Event]): Sim =
-    evs.foldLeft(this)(_.processEvent(_))
-
-  private def processEvent(ev: Sim.Event): Sim = ev match {
-    case PortChange(port, newValue) =>
-      if (newValue == portValues(port)) this
-      else {
-        copy(portValues = portValues + ((port, newValue)))
-          .runObservers(port)
-          .schedule(conf.wireDelay, PortGroupDrive(c.groupOf(port)))
-      }
-
-    case PortGroupDrive(group) =>
-      val (sim1, newValue) = groupDrivenValues(group) match {
-        case Nil => (this, None)
-        case v :: Nil => (this, Some(v))
-        case vs =>
-          (
-            schedule(conf.scTolerance, PortGroupCheck(group)),
-            vs.distinct match {
-              case v :: Nil => Some(v)
-              case _ => None
-            }
-          )
-      }
-      if (newValue == sim1.groupValues(group)) sim1
-      else {
-        sim1
-          .copy(groupValues = sim1.groupValues + ((group, newValue)))
-          .runObservers(group)
-      }
-
-    case PortGroupCheck(group) =>
-      val newValue = groupDrivenValues(group) match {
-        case Nil | List(_) => // everything's fine
-        case vs =>
-          vs.distinct match {
-            case List(v) => println("WARNING")
-            case _ => throw new Exception("PUM")
-          }
-      }
-      this
-  }
-
-  private def groupDrivenValues(group: PortGroup): List[Boolean] =
-    c.portsOf(group).toList.map(portValues).flatten
-
-  private def runObservers(group: PortGroup): Sim =
-    c.portsOf(group).foldLeft(this)(_.runObservers(_))
-
-  private def runObservers(port: Port): Sim =
-    portObservers(port).foldLeft(this) { (sim1, f) => f(sim1) }
+  /** Unsubscribe. Updates already queued can still be polled. */
+  def close(): Unit = onClose()
 }
