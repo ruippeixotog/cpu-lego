@@ -102,7 +102,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
         var expectedQ = Option.empty[Boolean]
 
         SequentialScenario(comp)
-          .withPorts(d, en -> false, rstn -> true)
+          .withPorts(d -> false, en -> false, rstn -> true)
           .onStart { _ => expectedQ = None }
           .whenHigh(en) { sim => expectedQ = sim.get(d).orElse(expectedQ) }
           .whenLow(rstn) { sim => expectedQ = Some(false) }

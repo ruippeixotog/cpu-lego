@@ -81,7 +81,7 @@ case class ComponentCreator(design: Design) {
       case "$_ORNOT_" =>
         Map("Y" -> orNot(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
       case "$_SR_PP_" =>
-        Map("Q" -> flipflop(inPorts("S").asInstanceOf[Port], inPorts("R").asInstanceOf[Port])._1)
+        Map("Q" -> norLatch(inPorts("S").asInstanceOf[Port], inPorts("R").asInstanceOf[Port])._1)
       case "$_DFF_P_" =>
         Map("Q" -> dLatch(inPorts("D").asInstanceOf[Port], inPorts("C").asInstanceOf[Port])._1)
       case "$_DFFSR_PNN_" =>
