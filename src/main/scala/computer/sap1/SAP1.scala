@@ -4,7 +4,7 @@ import component.BuilderAPI.*
 import component.sap1.*
 import computer.sap1.Instr.*
 import core.*
-import simulator.{Index, GateProcessor}
+import simulator.{Circuit, Index, RefSim, Sim}
 import util.Formatter
 import util.Implicits.*
 
@@ -22,17 +22,35 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   val index = Index(comp)
 
-  def setup: GateProcessor =
-    GateProcessor.setup(comp).set(clkSig, false).set(clr, false).run().set(clr, true).run()
+  // The demo paces the reference simulator well above real time, so that a
+  // short wall-clock settle comfortably covers gate propagation.
+  private val ticksPerSecond = 100000
+  private val settleMs = 200
 
-  def printState(sim: GateProcessor): Unit = {
+  private def settle(): Unit = Thread.sleep(settleMs)
+
+  /** A live simulation of the SAP1: clock held low, clear asserted then released. The simplest peripherals — two wires
+    * driven from the outside world.
+    */
+  def setup: Sim = {
+    val sim = RefSim(Circuit(comp), ticksPerSecond = ticksPerSecond)
+    sim.start()
+    sim.set(clkSig, false)
+    sim.set(clr, false)
+    settle()
+    sim.set(clr, true)
+    settle()
+    sim
+  }
+
+  def printState(sim: Sim): Unit = {
     val fmt = Formatter(sim, index) {
       case ("r", v) => v.indexOf(Some(true)) + 1
       case ("ins", v) => v.sequence.flatMap(Instr.apply).getOrElse("x")
     }
 
     fmt.print(s"""
-      |---- t=${sim.tick} clk=%b{sap1.clock.out} hlt=%b{sap1.out1} ----
+      |---- clk=%b{sap1.clock.out} hlt=%b{sap1.out1} ----
       |t: %r{sap1.sequencer.ringCounter.out}
       |instr: %b{sap1.instr}
       |con: %b{sap1.sequencer.out_con[0,4]} %b{*[4,8]} %b{*[8,12]}
@@ -49,13 +67,21 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
     """.stripMargin)
   }
 
-  def run: GateProcessor = {
-    def loop(sim: GateProcessor): GateProcessor = {
+  /** Load the program and bit-bang the clock until it halts. Returns the stopped simulator, still readable via get.
+    */
+  def run: Sim = {
+    val sim = setup
+    Programmer.load(sim, ramIn, prog)
+    while (sim.get(hlt) != Some(true)) {
       if (debug) printState(sim)
-      if (sim.get(hlt) == Some(true)) sim
-      else loop(sim.toggle(clkSig).run().toggle(clkSig).run())
+      sim.set(clkSig, true)
+      settle()
+      sim.set(clkSig, false)
+      settle()
     }
-    loop(Programmer.load(setup, ramIn, prog))
+    if (debug) printState(sim)
+    sim.stop()
+    sim
   }
 }
 
