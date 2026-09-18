@@ -10,9 +10,9 @@ import core.*
   * instead of settling). Its inputs must also change one at a time.
   *
   * Academic building block — use [[latchClocked]] (which adds clock gating and override priority) or [[dLatch]]
-  * instead.
+  * instead. Package-private: not part of the public component API.
   */
-def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
+private[component] def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
   val q = nand(set, aux1)
   val nq = nand(reset, aux2)
@@ -24,7 +24,8 @@ def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
 /** Textbook active-high SR latch: two NOR gates wired in a loop (the NORs are themselves built from NANDs).
   *
   * Same warning as [[nandLatch]]: driving both inputs High is forbidden. Academic building block — used here
-  * only as the Yosys `$_SR_PP_` cell mapping. Prefer [[latchClocked]] or [[dLatch]].
+  * only as the Yosys `$_SR_PP_` cell mapping, which is why it stays public (the `yosys` package is outside
+  * `component`). Prefer [[latchClocked]] or [[dLatch]].
   */
 def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
@@ -39,13 +40,16 @@ def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   *
   * While `clk` is High the latch follows `set`/`reset`; while Low it holds its value. The active-low `clear`
   * and `preset` override everything at any time: `clear` forces the output Low, `preset` forces it High
-  * (`clear` wins if both are pressed). A priority circuit in front of the raw [[nandLatch]] makes sure it never
+  * (`clear` wins if both are pressed). A priority circuit in front of the raw `nandLatch` makes sure it never
   * sees the forbidden "both Low" combination, no matter what the overrides do.
+  *
+  * Package-private: the primitive that [[dLatch]] and [[jkFlipFlop]] are built from, not for direct use outside
+  * the `component` package.
   *
   * Contract: do not drive `set` and `reset` High together while `clk` is High; do not drive `clear` and
   * `preset` Low together; change inputs one at a time.
   */
-def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
+private[component] def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
   newSpec {
     nandLatch(
       or(not(clear), and(preset, nand(set, clk))),
@@ -63,8 +67,10 @@ def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: 
   *
   * The "one closes before the other opens" ordering holds for any positive gate/wire delays: the turn-on path
   * passes through strictly more gates than the turn-off path, so it is strictly slower.
+  *
+  * Package-private infrastructure for the master-slave flip-flops.
   */
-def nonOverlapClock(clk: Port): Spec[(Port, Port)] = newSpec {
+private[component] def nonOverlapClock(clk: Port): Spec[(Port, Port)] = newSpec {
   val clkM = and(not(clk), not(not(not(clk))))
   val clkS = and(clk, not(not(clk)))
   (clkM, clkS)
@@ -87,11 +93,11 @@ def dLatch(in: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(
   dLatchWithPhases(in, clkM, clkS, clear, preset)
 }
 
-/** Same as [[dLatch]], but takes the two phase signals from a shared [[nonOverlapClock]] instead of building its
+/** Same as [[dLatch]], but takes the two phase signals from a shared `nonOverlapClock` instead of building its
   * own. Use this when many flip-flops share one clock (e.g. [[ringCounter]]) so there is only one phase
-  * generator instead of one per bit.
+  * generator instead of one per bit. Package-private.
   */
-def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
+private[component] def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
   newSpec {
     val (qm, _) = latchClocked(in, not(in), clkM, clear, preset)
     latchClocked(qm, not(qm), clkS, clear, preset)
