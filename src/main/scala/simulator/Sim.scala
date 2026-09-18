@@ -19,7 +19,7 @@ object Sim {
   inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): Sim =
     SimSetup.setup(Circuit(root, extraWires))
 
-  inline def setupAndRun(root: Component, maxTicks: Option[Int] = None): Sim =
+  inline def setupAndRun(root: Component, maxTicks: Option[Long] = None): Sim =
     setup(root).run(maxTicks)
 }
 
@@ -31,7 +31,7 @@ final case class Sim(
     private val portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
     private val portObservers: Map[Port, List[Sim => Sim]] = Map().withDefaultValue(Nil),
     private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
-) {
+) extends SimEngine {
 
   private def schedule(after: Long, ev: Sim.Event): Sim =
     copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
@@ -65,13 +65,35 @@ final case class Sim(
   def watch(port: Port)(callback: Sim => Sim): Sim =
     copy(portObservers = portObservers + ((port, callback :: portObservers.getOrElse(port, Nil))))
 
-  @tailrec def run(maxTicks: Option[Int] = None): Sim =
+  /** External observation of the port: reports effective-value changes without
+    * participating in the simulation. See [[SimEngine.observe]].
+    */
+  def observe(port: Port, f: PortUpdate => Unit): SimEngine =
+    watch(port)(s => { f(PortUpdate(port, s.get(port), s.tick)); s })
+
+  /** Process every event batch with timestamp <= `deadline`.
+    * See [[SimEngine.runTo]].
+    */
+  def runTo(deadline: Long): SimEngine = {
+    var s: Sim = this
+    var next = s.step(Some(deadline))
+    while (next.isDefined) {
+      s = next.get
+      next = s.step(Some(deadline))
+    }
+    s
+  }
+
+  @tailrec def run(maxTicks: Option[Long] = None): Sim =
     step(maxTicks) match {
       case None => this
       case Some(next) => next.run(maxTicks)
     }
 
-  def step(maxTicks: Option[Int] = None): Option[Sim] = {
+  /** Process the next scheduled event batch. See [[SimEngine.step]]. */
+  def step(): SimEngine = step(None).getOrElse(this)
+
+  def step(maxTicks: Option[Long] = None): Option[Sim] = {
     if (events.isEmpty) return None
 
     val (t1, evs) = events.head

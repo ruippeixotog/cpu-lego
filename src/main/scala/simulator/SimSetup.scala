@@ -4,8 +4,8 @@ import core.*
 
 object SimSetup {
 
-  def setup(c: Circuit): Sim = {
-    val sim = Sim(c).set(High, true).set(Low, false)
+  def setup(c: Circuit, conf: Config = Config.default): Sim = {
+    val sim = Sim(c, conf).set(High, true).set(Low, false)
     import sim.conf._
 
     c.components.foldLeft(sim) {
