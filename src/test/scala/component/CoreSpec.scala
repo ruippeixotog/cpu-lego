@@ -7,7 +7,7 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import simulator.{Circuit, Sim, SimSetup}
+import simulator.{Circuit, GateProcessor, SimSetup}
 import testkit.*
 import util.Implicits.*
 
@@ -51,7 +51,7 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       val set, reset = newPort()
       val ((q, nq), comp) = buildComponent { flipflop(set, reset) }
 
-      def setInputs(s: Boolean, r: Boolean)(sim: Sim) =
+      def setInputs(s: Boolean, r: Boolean)(sim: GateProcessor) =
         sim.set(set, s).set(reset, r)
 
       runPlan(
@@ -104,14 +104,14 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
 
     "start at High" in {
       val (out, comp) = buildComponent { clock(100) }
-      val sim = Sim.setupAndRun(comp, Some(0))
+      val sim = GateProcessor.setupAndRun(comp, Some(0))
       sim.get(out) must beSome(true)
     }
 
     "toggle its value according to its frequency" in {
       forAll(Gen.choose(10, 1000), Gen.choose(10, 1000)) { (freq, simEnd) =>
         val (out, comp) = buildComponent { clock(freq) }
-        val sim = Sim.setupAndRun(comp, Some(simEnd))
+        val sim = GateProcessor.setupAndRun(comp, Some(simEnd))
         sim.get(out) must beSome((simEnd / freq) % 2 == 0)
       }
     }

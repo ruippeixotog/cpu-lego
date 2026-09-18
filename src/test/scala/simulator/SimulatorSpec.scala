@@ -56,7 +56,7 @@ class SimulatorSpec extends BaseSpec {
 
     "process correctly simultaneous events" in {
       val (out, comp) = buildComponent { nand(nand(High, Low), nand(High, Low)) }
-      val sim = Sim.setupAndRun(comp)
+      val sim = GateProcessor.setupAndRun(comp)
       sim.get(out) must beSome(false)
     }
 
@@ -66,7 +66,7 @@ class SimulatorSpec extends BaseSpec {
           val Instance(comp, f) = spec.instance
           (comp(sigs), f(sigs.map(_.toBool)))
         }
-        val sim = Sim.setupAndRun(comp)
+        val sim = GateProcessor.setupAndRun(comp)
         sim.get(out) must beSome(expected)
       }
     }
@@ -95,7 +95,7 @@ class SimulatorSpec extends BaseSpec {
         switch(in1, High) ~> bus
         switch(in2, High) ~> bus
       }
-      Sim
+      GateProcessor
         .setup(comp)
         .set(in1, Some(true))
         .set(in2, Some(false))

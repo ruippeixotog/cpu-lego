@@ -6,20 +6,20 @@ import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.specs2.ScalaCheck
 import org.specs2.execute.{AsResult, Result}
 import org.specs2.mutable.Specification
-import simulator.Sim
+import simulator.GateProcessor
 
 trait SequentialScenarios { this: Specification & ScalaCheck =>
-  type BeforeActionFunc = (Sim, Port, Boolean, Option[Boolean]) => Sim
-  type ActionFunc = (Sim, Port, Boolean, Option[Boolean]) => Unit
+  type BeforeActionFunc = (GateProcessor, Port, Boolean, Option[Boolean]) => GateProcessor
+  type ActionFunc = (GateProcessor, Port, Boolean, Option[Boolean]) => Unit
 
   case class SequentialScenario(
       comp: Component,
       ports: Seq[(Port, Option[Boolean])] = Nil,
       testCases: Seq[Seq[(Port, Boolean)]] = Nil,
-      onStartFunc: Sim => Unit = _ => {},
+      onStartFunc: GateProcessor => Unit = _ => {},
       beforeActionFuncs: Seq[BeforeActionFunc] = Vector(),
       onActionFuncs: Seq[ActionFunc] = Vector(),
-      checkFunc: Sim => Result = _ => ok
+      checkFunc: GateProcessor => Result = _ => ok
   ) {
 
     def withPorts(ports: Port | Bus | (Port, Boolean) | (Bus, Boolean)*) = {
@@ -34,28 +34,28 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
 
     def withTestCases(testCases: Seq[(Port, Boolean)]*) = copy(testCases = this.testCases ++ testCases)
 
-    def onStart(f: Sim => Unit) = copy(onStartFunc = f)
+    def onStart(f: GateProcessor => Unit) = copy(onStartFunc = f)
     def beforeAction(f: BeforeActionFunc) = copy(beforeActionFuncs = beforeActionFuncs :+ f)
     def onAction(f: ActionFunc) = copy(onActionFuncs = onActionFuncs :+ f)
 
-    def onPosEdge(port: Port)(f: Sim => Unit) = onAction {
+    def onPosEdge(port: Port)(f: GateProcessor => Unit) = onAction {
       case (sim, `port`, true, oldVal) if oldVal != Some(true) => f(sim)
       case _ => // do nothing
     }
-    def onNegEdge(port: Port)(f: Sim => Unit) = onAction {
+    def onNegEdge(port: Port)(f: GateProcessor => Unit) = onAction {
       case (sim, `port`, false, oldVal) if oldVal != Some(false) => f(sim)
       case _ => // do nothing
     }
-    def whenHigh(port: Port)(f: Sim => Unit) = onAction {
+    def whenHigh(port: Port)(f: GateProcessor => Unit) = onAction {
       case (sim, _, _, _) if sim.isHigh(port) => f(sim)
       case _ => // do nothing
     }
-    def whenLow(port: Port)(f: Sim => Unit) = onAction {
+    def whenLow(port: Port)(f: GateProcessor => Unit) = onAction {
       case (sim, _, _, _) if sim.isLow(port) => f(sim)
       case _ => // do nothing
     }
 
-    def check(f: Sim => Result) = copy(checkFunc = f)
+    def check(f: GateProcessor => Result) = copy(checkFunc = f)
 
     def run(): Prop = {
       given Arbitrary[Port] = Arbitrary(Gen.oneOf(ports.map(_._1)))
@@ -67,7 +67,7 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
     }
 
     def runTestCase(actions: Seq[(Port, Boolean)]): Result = {
-      var sim = Sim.setupAndRun(comp)
+      var sim = GateProcessor.setupAndRun(comp)
       ports.foreach { case (port, newVal) => sim = sim.set(port, newVal) }
       sim = sim.run()
       onStartFunc(sim)

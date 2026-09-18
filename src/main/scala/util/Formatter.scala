@@ -1,9 +1,9 @@
 package util
 
-import simulator.{Index, Sim}
+import simulator.{Index, GateProcessor}
 import util.Implicits.*
 
-case class Formatter(sim: Sim, index: Index)(
+case class Formatter(sim: GateProcessor, index: Index)(
     renderer: PartialFunction[(String, Vector[Option[Boolean]]), Any] = (spec, _) => {}
 ) {
   final val patt = raw"(?s)([^%]*)%([0-9a-z]+)\{([^}\[]+)(?:\[(\d+),(\d+)\])?\}(.*)".r

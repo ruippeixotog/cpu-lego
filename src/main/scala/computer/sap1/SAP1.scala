@@ -4,7 +4,7 @@ import component.BuilderAPI.*
 import component.sap1.*
 import computer.sap1.Instr.*
 import core.*
-import simulator.{Index, Sim}
+import simulator.{Index, GateProcessor}
 import util.Formatter
 import util.Implicits.*
 
@@ -22,10 +22,10 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   val index = Index(comp)
 
-  def setup: Sim =
-    Sim.setup(comp).set(clkSig, false).set(clr, false).run().set(clr, true).run()
+  def setup: GateProcessor =
+    GateProcessor.setup(comp).set(clkSig, false).set(clr, false).run().set(clr, true).run()
 
-  def printState(sim: Sim): Unit = {
+  def printState(sim: GateProcessor): Unit = {
     val fmt = Formatter(sim, index) {
       case ("r", v) => v.indexOf(Some(true)) + 1
       case ("ins", v) => v.sequence.flatMap(Instr.apply).getOrElse("x")
@@ -49,8 +49,8 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
     """.stripMargin)
   }
 
-  def run: Sim = {
-    def loop(sim: Sim): Sim = {
+  def run: GateProcessor = {
+    def loop(sim: GateProcessor): GateProcessor = {
       if (debug) printState(sim)
       if (sim.get(hlt) == Some(true)) sim
       else loop(sim.toggle(clkSig).run().toggle(clkSig).run())
