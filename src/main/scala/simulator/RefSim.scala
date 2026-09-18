@@ -49,7 +49,7 @@ final class RefSim(
 
   private type Action = GateProcessor => GateProcessor
 
-  private val published = new AtomicReference[GateProcessor](SimSetup.setup(circuit, conf))
+  private val published = new AtomicReference[GateProcessor](GateProcessor.setup(circuit, conf))
   private val inbox = new LinkedBlockingQueue[Action]()
   private val running = new AtomicBoolean(false)
   private val generation = new AtomicLong(0)
