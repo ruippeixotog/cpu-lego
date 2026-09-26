@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.collection.concurrent.TrieMap
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
@@ -122,9 +123,11 @@ final class RefSim(
     * drive inputs with [[set]]/[[unset]], but must not call [[start]] or [[stop]], which control the run loop.
     */
   def watch(port: Port)(callback: PortUpdate => Unit): AutoCloseable = {
-    ensureObserved(port)
+    // Register before requesting observation: the install action (and its catch-up) runs after the request is
+    // offered, so a notification can never be dispatched before the new subscriber is present to receive it.
     val sub = new CallbackSubscriber(callback)
     subscribers.getOrElseUpdate(port, new CopyOnWriteArrayList[Subscriber]()).add(sub)
+    ensureObserved(port)
     () => unsubscribe(port, sub)
   }
 
@@ -132,16 +135,40 @@ final class RefSim(
     * the returned subscription from any thread.
     */
   def subscribe(port: Port): PollSubscription = {
-    ensureObserved(port)
+    // Register before requesting observation: see watch.
     val queue = new LinkedBlockingQueue[PortUpdate]()
     val sub = new PollSubscriber(queue)
     subscribers.getOrElseUpdate(port, new CopyOnWriteArrayList[Subscriber]()).add(sub)
+    ensureObserved(port)
     new PollSubscription(port, queue, () => unsubscribe(port, sub))
   }
 
   private def ensureObserved(port: Port): Unit =
     if (observedPorts.putIfAbsent(port, ()).isEmpty)
-      inbox.offer(_.watch(port)(s => { dispatch(PortUpdate(port, s.get(port))); s }))
+      inbox.offer { s =>
+        val current = s.get(port)
+        // Catch-up: the port's last change may have been processed before this first observer was installed, in
+        // which case no callback would ever report it — yet it is already visible in the published state. Report the
+        // current value if it was never dispatched, so every effective-value change is delivered exactly once even
+        // when it predates the first watcher. This closes the observer-installation race: with the catch-up, a change
+        // is either reported here (processed before install) or by the observer below (processed after install).
+        if (current.isDefined && lastNotified.get(port) != Some(current))
+          pendingNotifications += PortUpdate(port, current)
+        s.watch(port)(s2 => { pendingNotifications += PortUpdate(port, s2.get(port)); s2 })
+      }
+
+  /** Port changes observed during the current pacing quantum, in simulation order. Buffered on the simulation thread
+    * and dispatched only after the new state is published, so an observer that reads back through [[get]] always sees
+    * the change it is being notified about — never the previous state.
+    */
+  private val pendingNotifications = ListBuffer.empty[PortUpdate]
+
+  /** Dispatch the quantum's buffered notifications, in order. Runs on the simulation thread, after publishing. */
+  private def dispatchNotifications(): Unit = {
+    val updates = pendingNotifications.toList
+    pendingNotifications.clear()
+    updates.foreach(dispatch)
+  }
 
   /** Deduplicate the processor's observer reports down to exactly one notification per effective-value change, then fan
     * out to subscribers. Runs on the simulation thread; only touches concurrent structures.
@@ -163,6 +190,7 @@ final class RefSim(
     while (running.get() && generation.get() == gen) {
       val deadline = startTick + saturatingTicks(System.nanoTime() - startNanos, ticksPerSecond)
       published.set(drain(published.get()).runTo(deadline))
+      dispatchNotifications()
       try {
         val a = inbox.poll(QuantumMillis, TimeUnit.MILLISECONDS)
         if (a != null) published.set(a(published.get()))

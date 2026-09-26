@@ -126,6 +126,28 @@ class RefSimSpec extends BaseSpec {
       }
     }
 
+    "deliver the current value to a watcher installed after the change" in {
+      val (in1, in2, out, circuit) = nandCircuit()
+      val sim = RefSim(circuit)
+
+      sim.start()
+      try {
+        // Drive the change and wait until it is published, so the transition is
+        // fully processed before any watcher exists. Without the install-time
+        // catch-up, a watcher installed now would never be notified.
+        sim.set(in1, true)
+        sim.set(in2, true)
+        waitFor() {
+          sim.get(out).filter(_ == false)
+        }
+
+        val sub = sim.subscribe(out)
+        try {
+          awaitUpdates(sub) must beEqualTo(List(PortUpdate(out, Some(false))))
+        } finally sub.close()
+      } finally sim.stop()
+    }
+
     "drive a whole bus at once" in {
       val (in1, in2, out, circuit) = nandCircuit()
       val sim = RefSim(circuit)
