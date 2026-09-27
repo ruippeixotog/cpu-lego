@@ -63,8 +63,10 @@ trait Sim {
   def get(bus: Bus): Vector[Option[Boolean]]
 
   /** Run `callback` on every effective-value change of the port. Callbacks run sequentially on a notifier thread, in
-    * simulation order. A callback must return quickly and must not throw (exceptions are reported and ignored). It may
-    * drive inputs with [[set]]/[[unset]], but must not call [[start]] or [[stop]].
+    * simulation order. When a callback runs, the published state already reflects the notified change: reading the
+    * port back through [[get]] returns the new value (or a later one), never the previous state. A callback must
+    * return quickly and must not throw (exceptions are reported and ignored). It may drive inputs with
+    * [[set]]/[[unset]], but must not call [[start]] or [[stop]].
     *
     * @return
     *   an AutoCloseable that unregisters the callback

@@ -3,6 +3,7 @@ package computer.sap1
 import computer.sap1.Instr.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
+import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
@@ -44,7 +45,52 @@ class Sap1Spec extends BaseSpec {
         ._2
 
       val sap1 = SAP1(prog)
-      sap1.run.get(sap1.out).sequence.map(_.toSignedInt) must beEqualTo(expected)
+      runFunctional(sap1, prog).get(sap1.out).sequence.map(_.toSignedInt) must beEqualTo(expected)
     }
+  }
+
+  /** Functional harness for the SAP-1 wiring: program the RAM and toggle the clock to quiescence until the program
+    * halts. Deterministic and fast; the live equivalent is computer.sap1.SAP1.run, the demo.
+    */
+  private def runFunctional(sap1: SAP1, prog: List[MemEntry]): GateProcessor = {
+    def load(sim: GateProcessor, prog: List[MemEntry], addr: Int = 0): GateProcessor =
+      prog match {
+        case entry :: rest =>
+          load(
+            sim
+              .set(sap1.ramIn.prog, true)
+              .set(sap1.ramIn.addr, addr.toBoolVec(4))
+              .set(
+                sap1.ramIn.data,
+                entry match {
+                  case instr: Instr => instr.repr
+                  case Data(value) => value.toBoolVec(8)
+                }
+              )
+              .run()
+              .set(sap1.ramIn.write, true)
+              .run()
+              .set(sap1.ramIn.write, false)
+              .run(),
+            rest,
+            addr + 1
+          )
+        case Nil =>
+          sim.set(sap1.ramIn.prog, false).run()
+      }
+
+    var sim = load(
+      GateProcessor
+        .setup(sap1.comp)
+        .set(sap1.clkSig, false)
+        .set(sap1.clr, false)
+        .run()
+        .set(sap1.clr, true)
+        .run(),
+      prog
+    )
+    while (sim.get(sap1.hlt) != Some(true))
+      sim = sim.toggle(sap1.clkSig).run().toggle(sap1.clkSig).run()
+    sim
   }
 }

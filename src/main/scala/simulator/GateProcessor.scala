@@ -16,8 +16,59 @@ object GateProcessor {
     case PortGroupCheck(group: PortGroup)
   }
 
+  /** Build a GateProcessor for the circuit: install gate behavior and tie the High/Low constant ports. High/Low wiring
+    * is an implementation detail of this engine, not a general simulator concern.
+    */
+  def setup(c: Circuit, conf: Config): GateProcessor = {
+    val p = GateProcessor(c, conf).set(High, true).set(Low, false)
+    import p.conf._
+
+    c.components.foldLeft(p) {
+
+      case (p, NAND(in1, in2, out)) =>
+        binaryOp(p, in1, in2, out, gateDelay) {
+          case (Some(false), _) => Some(true)
+          case (_, Some(false)) => Some(true)
+          case (Some(true), Some(true)) => Some(false)
+          case _ => None
+        }
+
+      case (p, FlipFlop(set, reset, q, nq)) =>
+        def propagate(s: GateProcessor): GateProcessor = {
+          val res = (s.get(set), s.get(reset)) match {
+            case (Some(true), Some(false)) => Some(true)
+            case (Some(false), Some(true)) => Some(false)
+            case _ => None
+          }
+          res.fold(s) { v =>
+            s.setAfter(gateDelay, q, v).setAfter(gateDelay, nq, !v)
+          }
+        }
+        p.watch(set)(propagate).watch(reset)(propagate)
+
+      case (p, Clock(freq, out)) =>
+        p.set(out, true).watch(out)(_.toggleAfter(freq, out))
+
+      case (p, Switch(in, out, enable)) =>
+        binaryOp(p, enable, in, out, 0) {
+          case (Some(true), v) => v
+          case _ => None
+        }
+    }
+  }
+
+  private def binaryOp(p: GateProcessor, port1: Port, port2: Port, out: Port, delay: Int)(
+      f: (Option[Boolean], Option[Boolean]) => Option[Boolean]
+  ): GateProcessor = {
+
+    def propagate(s: GateProcessor): GateProcessor =
+      s.setAfter(delay, out, f(s.get(port1), s.get(port2)))
+
+    p.watch(port1)(propagate).watch(port2)(propagate)
+  }
+
   inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): GateProcessor =
-    SimSetup.setup(Circuit(root, extraWires))
+    setup(Circuit(root, extraWires), Config.default)
 
   inline def setupAndRun(root: Component, maxTicks: Option[Long] = None): GateProcessor =
     setup(root).run(maxTicks)

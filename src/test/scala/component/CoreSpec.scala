@@ -7,7 +7,7 @@ import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import simulator.{Circuit, GateProcessor, SimSetup}
+import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
