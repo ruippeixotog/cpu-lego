@@ -82,14 +82,9 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
   */
 def ram(ins: Bus, addr: Bus, we: Port, ce: Port): Spec[Bus] = newSpec {
   val select = decoder(addr, High)
-  val writeGates = select.map(sel => and(we, sel))
-  val cells = select.zip(writeGates).map { case (sel, wg) =>
-    ins.map(in => latchClocked(in, not(in), wg)._1)
+  val outs = ins.map { in =>
+    select.map { sel => and(sel, latchClocked(in, not(in), and(we, sel))._1) }.reduce(or)
   }
-  val outs = ins.indices.map { i =>
-    cells.zip(select).map { case (word, sel) => and(sel, word(i)) }.reduce(or)
-  }.toVector
-
   buffered(ce)(outs)
 }
 
