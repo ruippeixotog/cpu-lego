@@ -39,17 +39,10 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
     * everywhere. In wall-clock milliseconds, through the simulator's pace. The short-circuit tolerance is excluded:
     * it only governs multi-driver conflicts, not propagation.
     */
-  private val phaseBoundMs: Long = {
+  val phaseBoundMs: Long = {
     val ticks = (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
     (ticks * 1000 + ticksPerSecond - 1) / ticksPerSecond
   }
-
-  /** The RAM's physical instrumentation taps, resolved once from the component index. */
-  val ramTaps = RamTaps(
-    cells = (0 until 16).map(i => index.buses(s"sap1.ram.ram.cells_$i")).toVector,
-    writeGates = index.buses("sap1.ram.ram.writeGates"),
-    select = index.buses("sap1.ram.ram.select")
-  )
 
   private val clkOut = index.ports("sap1.clock.out")
   private val ringOut = index.buses("sap1.sequencer.ringCounter.out")
@@ -108,7 +101,15 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
   def run(using ExecutionContext): Future[Sim] =
     for {
       sim <- setup
-      _ <- Programmer.load(sim, ramIn, ramTaps, prog)
+      _ <- Programmer.load(sim, ramIn, prog, phaseBoundMs)
+      sim2 <- execute(sim)
+    } yield sim2
+
+  /** Bit-bang the clock until the program halts. Returns a Future of the stopped simulator. Public so tests can
+    * execute custom load sequences (e.g. loading twice) before running.
+    */
+  def execute(sim: Sim)(using ExecutionContext): Future[Sim] =
+    for {
       _ <- Sync.after(phaseBoundMs)
       _ <- clockUntilHalt(sim)
     } yield {

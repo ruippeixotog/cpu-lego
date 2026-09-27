@@ -29,11 +29,6 @@ class ProgrammerSpec extends BaseSpec {
     Data(20)
   )
 
-  def entryBits(entry: MemEntry): Vector[Boolean] = entry match {
-    case instr: Instr => instr.repr
-    case Data(value) => value.toBoolVec(8).toVector
-  }
-
   def withLiveSap1[A](prog: List[MemEntry])(f: (SAP1, Sim) => A): A = {
     val sap1 = SAP1(prog)
     val sim = Await.result(sap1.setup, Duration(60, "s"))
@@ -41,44 +36,25 @@ class ProgrammerSpec extends BaseSpec {
     finally sim.stop()
   }
 
-  "The RAM instrumentation" should {
+  def runToHalt(sap1: SAP1, sim: Sim): Sim =
+    Await.result(sap1.execute(sim), Duration(120, "s"))
 
-    "expose one cell bus per word plus the write-gate and select buses" in withLiveSap1(prog) { (sap1, _) =>
-      sap1.ramTaps.cells must haveLength(16)
-      sap1.ramTaps.cells.foreach(_ must haveLength(8))
-      sap1.ramTaps.writeGates must haveLength(16)
-      sap1.ramTaps.select must haveLength(16)
-    }
-  }
+  def outValue(sap1: SAP1, sim: Sim): Option[Int] =
+    sim.get(sap1.out).sequence.map(_.toSignedInt)
 
   "Programmer.load" should {
 
-    "store every word through the live sim, leaving write gates closed" in withLiveSap1(prog) { (sap1, sim) =>
-      Await.result(Programmer.load(sim, sap1.ramIn, sap1.ramTaps, prog), Duration(60, "s"))
+    "leave prog released and the write line low after loading" in withLiveSap1(prog) { (sap1, sim) =>
+      Await.result(Programmer.load(sim, sap1.ramIn, prog, sap1.phaseBoundMs), Duration(60, "s"))
 
-      prog.zipWithIndex.foreach { case (entry, addr) =>
-        sim.get(sap1.ramTaps.cells(addr)).sequence must beEqualTo(Some(entryBits(entry)))
-      }
-      // Untouched words keep their initial state.
-      (prog.length until 16).foreach { addr =>
-        sim.get(sap1.ramTaps.cells(addr)).sequence must beNone
-      }
-      // Every write gate is closed once programming is done.
-      sim.get(sap1.ramTaps.writeGates) must beEqualTo(Vector.fill(16)(Some(false)))
-    }
-
-    "tolerate loading the identical program twice" in withLiveSap1(prog) { (sap1, sim) =>
-      Await.result(Programmer.load(sim, sap1.ramIn, sap1.ramTaps, prog), Duration(60, "s"))
-      Await.result(Programmer.load(sim, sap1.ramIn, sap1.ramTaps, prog), Duration(60, "s"))
-
-      prog.zipWithIndex.foreach { case (entry, addr) =>
-        sim.get(sap1.ramTaps.cells(addr)).sequence must beEqualTo(Some(entryBits(entry)))
-      }
+      // Black-box: only the peripheral's own input ports are observed, never RAM internals.
+      sim.get(sap1.ramIn.prog) must beEqualTo(Some(false))
+      sim.get(sap1.ramIn.write) must beEqualTo(Some(false))
     }
 
     "reject a program that does not fit in RAM" in withLiveSap1(prog) { (sap1, sim) =>
       val tooLong = List.fill(17)(Data(0))
-      Await.result(Programmer.load(sim, sap1.ramIn, sap1.ramTaps, tooLong), Duration(60, "s")) must
+      Await.result(Programmer.load(sim, sap1.ramIn, tooLong, sap1.phaseBoundMs), Duration(60, "s")) must
         throwAn[IllegalArgumentException]
     }
   }
@@ -89,7 +65,19 @@ class ProgrammerSpec extends BaseSpec {
       val sap1 = SAP1(prog)
       val sim = Await.result(sap1.run, Duration(120, "s"))
       sim.isRunning must beFalse
-      sim.get(sap1.out).sequence.map(_.toSignedInt) must beEqualTo(Some(22))
+      outValue(sap1, sim) must beEqualTo(Some(22))
+    }
+
+    "run the demo program to completion after loading it twice" in withLiveSap1(prog) { (sap1, sim) =>
+      // Regression: the tap-based protocol corrupted cells on the second load when the
+      // decoder's address transients overlapped the write pulse. The phase-bound protocol
+      // holds write low across every address change, so the second load is harmless.
+      Await.result(Programmer.load(sim, sap1.ramIn, prog, sap1.phaseBoundMs), Duration(60, "s"))
+      Await.result(Programmer.load(sim, sap1.ramIn, prog, sap1.phaseBoundMs), Duration(60, "s"))
+
+      val stopped = runToHalt(sap1, sim)
+      stopped.isRunning must beFalse
+      outValue(sap1, stopped) must beEqualTo(Some(22))
     }
   }
 }
