@@ -105,20 +105,20 @@ private[component] def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear:
 
 /** Recommended JK flip-flop, for counters (page 99).
   *
-  * Master-slave structure like [[dLatch]]: the master reads `j`/`k` (combined with the slave's feedback) while
-  * the clock is Low, the slave copies the master while the clock is High. `j=1, k=0` sets, `j=0, k=1` resets,
-  * `j=k=1` toggles. The feedback comes from the slave, which only changes while the master is closed, so the
-  * output cannot race around within one clock phase.
+  * Built from an edge-triggered [[dLatch]] driven by the JK next-state equation `next = (j & ~q) | (~k & q)`:
+  * `j=1, k=0` sets, `j=0, k=1` resets, `j=k=1` toggles, `j=k=0` holds. Because the D flip-flop captures
+  * atomically on the rising edge, `j`/`k` may change freely while the clock is Low (subject to the usual setup
+  * time) — unlike a level-sensitive SR master, there is no race between the master's transparency window and
+  * the slave's feedback.
   *
-  * Same timing contract as [[dLatch]]: `j`/`k` stable around the rising edge, slow enough clock, and do not
-  * toggle `clear`/`preset` at the same instant.
+  * Same timing contract as [[dLatch]]: `j`/`k` stable around the rising clock edge; keep the clock slow enough
+  * for all signals to settle between edges; do not toggle `clear` and `preset` at the same instant.
   */
 def jkFlipFlop(j: Port, k: Port, clk: Port, clear: Port, preset: Port = High): Spec[(Port, Port)] = newSpec {
-  val (clkM, clkS) = nonOverlapClock(clk)
-  val qm = newPort()
-  val (q, nq) = latchClocked(qm, not(qm), clkS, clear, preset)
-  val (qmOut, _) = latchClocked(and(j, nq), and(k, q), clkM, clear, preset)
-  qmOut ~> qm
+  val qAux, nqAux = newPort()
+  val (q, nq) = dLatch(or(and(j, nqAux), and(not(k), qAux)), clk, clear, preset)
+  q ~> qAux
+  nq ~> nqAux
   (q, nq)
 }
 
