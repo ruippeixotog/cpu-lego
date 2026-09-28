@@ -5,9 +5,9 @@ import core.*
 
 /** Textbook active-low SR latch: two NAND gates wired in a loop (page 92).
   *
-  * This is the raw memory cell everything else is built from. It is not safe to use directly: driving both
-  * inputs Low is forbidden (both outputs go High, and releasing them together can leave the latch oscillating
-  * instead of settling). Its inputs must also change one at a time.
+  * This is the raw memory cell everything else is built from. It is not safe to use directly: driving both inputs Low
+  * is forbidden (both outputs go High, and releasing them together can leave the latch oscillating instead of
+  * settling). Its inputs must also change one at a time.
   *
   * Academic building block — use [[latchClocked]] (which adds clock gating and override priority) or [[dLatch]]
   * instead. Package-private: not part of the public component API.
@@ -23,9 +23,9 @@ private[component] def nandLatch(set: Port, reset: Port): Spec[(Port, Port)] = n
 
 /** Textbook active-high SR latch: two NOR gates wired in a loop (the NORs are themselves built from NANDs).
   *
-  * Same warning as [[nandLatch]]: driving both inputs High is forbidden. Academic building block — used here
-  * only as the Yosys `$_SR_PP_` cell mapping, which is why it stays public (the `yosys` package is outside
-  * `component`). Prefer [[latchClocked]] or [[dLatch]].
+  * Same warning as [[nandLatch]]: driving both inputs High is forbidden. Academic building block — used here only as
+  * the Yosys `$_SR_PP_` cell mapping, which is why it stays public (the `yosys` package is outside `component`). Prefer
+  * [[latchClocked]] or [[dLatch]].
   */
 def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
   val aux1, aux2 = newPort()
@@ -38,18 +38,28 @@ def norLatch(set: Port, reset: Port): Spec[(Port, Port)] = newSpec {
 
 /** Recommended low-level storage primitive: a clocked SR latch with asynchronous overrides (pages 94, 97).
   *
-  * While `clk` is High the latch follows `set`/`reset`; while Low it holds its value. The active-low `clear`
-  * and `preset` override everything at any time: `clear` forces the output Low, `preset` forces it High
-  * (`clear` wins if both are pressed). A priority circuit in front of the raw `nandLatch` makes sure it never
-  * sees the forbidden "both Low" combination, no matter what the overrides do.
+  * While `clk` is High the latch follows `set`/`reset`; while Low it holds its value. The active-low `clear` and
+  * `preset` override everything at any time: `clear` forces the output Low, `preset` forces it High. Asserting both Low
+  * holds the current value (neither wins). A priority circuit in front of the raw `nandLatch` makes sure it never sees
+  * the forbidden "both Low" combination, no matter what the overrides do.
   *
-  * Package-private: the primitive that [[dLatch]] and [[jkFlipFlop]] are built from, not for direct use outside
-  * the `component` package.
+  * Timing contract: the gate (`clk`) must not fall within a few gate delays of a `set`/`reset` change; if it does, the
+  * latch never settles. A NAND latch caught in the forbidden state keeps oscillating (this simulator models pure
+  * transport delays, with no noise to break the symmetry), so `GateProcessor.run()` never returns — a hung simulation,
+  * not a corrupted word.
   *
-  * Contract: do not drive `set` and `reset` High together while `clk` is High; do not drive `clear` and
-  * `preset` Low together; change inputs one at a time.
+  * Package-private: the primitive that [[dLatch]] and [[jkFlipFlop]] are built from, not for direct use outside the
+  * `component` package.
+  *
+  * Contract: do not drive `set` and `reset` High together while `clk` is High; change inputs one at a time.
   */
-private[component] def latchClocked(set: Port, reset: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
+private[component] def latchClocked(
+    set: Port,
+    reset: Port,
+    clk: Port,
+    clear: Port = High,
+    preset: Port = High
+): Spec[(Port, Port)] =
   newSpec {
     nandLatch(
       or(not(clear), and(preset, nand(set, clk))),
@@ -59,14 +69,14 @@ private[component] def latchClocked(set: Port, reset: Port, clk: Port, clear: Po
 
 /** Splits the clock into two phase signals for master-slave flip-flops.
   *
-  * Produces `(clkM, clkS)`: `clkM` is High while `clk` is Low (the master latch may read its input), `clkS` is
-  * High while `clk` is High (the slave latch may read the master). Each phase turns on a little later than the
-  * other turns off, so the master is fully closed before the slave opens, and vice versa. The two latches are
-  * therefore never open at the same time — without this, input data could shoot straight through both latches
-  * within a single clock phase and the flip-flop would stop behaving as edge-triggered.
+  * Produces `(clkM, clkS)`: `clkM` is High while `clk` is Low (the master latch may read its input), `clkS` is High
+  * while `clk` is High (the slave latch may read the master). Each phase turns on a little later than the other turns
+  * off, so the master is fully closed before the slave opens, and vice versa. The two latches are therefore never open
+  * at the same time — without this, input data could shoot straight through both latches within a single clock phase
+  * and the flip-flop would stop behaving as edge-triggered.
   *
-  * The "one closes before the other opens" ordering holds for any positive gate/wire delays: the turn-on path
-  * passes through strictly more gates than the turn-off path, so it is strictly slower.
+  * The "one closes before the other opens" ordering holds for any positive gate/wire delays: the turn-on path passes
+  * through strictly more gates than the turn-off path, so it is strictly slower.
   *
   * Package-private infrastructure for the master-slave flip-flops.
   */
@@ -78,26 +88,32 @@ private[component] def nonOverlapClock(clk: Port): Spec[(Port, Port)] = newSpec 
 
 /** Recommended flip-flop: captures `in` on the rising edge of `clk` (page 96).
   *
-  * Two [[latchClocked]]s in series (master and slave), driven by the two phases of [[nonOverlapClock]]. The
-  * master reads `in` while the clock is Low; on the rising edge the master closes and the slave opens, copying
-  * the master to the output. Because the phases never overlap, the output only changes on the rising edge.
+  * Two [[latchClocked]]s in series (master and slave), driven by the two phases of [[nonOverlapClock]]. The master
+  * reads `in` while the clock is Low; on the rising edge the master closes and the slave opens, copying the master to
+  * the output. Because the phases never overlap, the output only changes on the rising edge.
   *
-  * The active-low `clear`/`preset` override at any time (`clear` wins if both are pressed); they reach both
+  * The active-low `clear`/`preset` override at any time (asserting both Low holds the current value); they reach both
   * latches, so no stale value survives in the master.
   *
-  * Timing contract: keep `in` stable around the rising clock edge; keep the clock slow enough for all signals
-  * to settle between edges; do not toggle `clear` and `preset` at the same instant.
+  * Timing contract: keep `in` stable around the rising clock edge; keep the clock slow enough for all signals to settle
+  * between edges; do not toggle `clear` and `preset` at the same instant.
   */
 def dLatch(in: Port, clk: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] = newSpec {
   val (clkM, clkS) = nonOverlapClock(clk)
   dLatchWithPhases(in, clkM, clkS, clear, preset)
 }
 
-/** Same as [[dLatch]], but takes the two phase signals from a shared `nonOverlapClock` instead of building its
-  * own. Use this when many flip-flops share one clock (e.g. [[ringCounter]]) so there is only one phase
-  * generator instead of one per bit. Package-private.
+/** Same as [[dLatch]], but takes the two phase signals from a shared `nonOverlapClock` instead of building its own. Use
+  * this when many flip-flops share one clock (e.g. [[ringCounter]]) so there is only one phase generator instead of one
+  * per bit. Package-private.
   */
-private[component] def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear: Port = High, preset: Port = High): Spec[(Port, Port)] =
+private[component] def dLatchWithPhases(
+    in: Port,
+    clkM: Port,
+    clkS: Port,
+    clear: Port = High,
+    preset: Port = High
+): Spec[(Port, Port)] =
   newSpec {
     val (qm, _) = latchClocked(in, not(in), clkM, clear, preset)
     latchClocked(qm, not(qm), clkS, clear, preset)
@@ -106,13 +122,12 @@ private[component] def dLatchWithPhases(in: Port, clkM: Port, clkS: Port, clear:
 /** Recommended JK flip-flop, for counters (page 99).
   *
   * Built from an edge-triggered [[dLatch]] driven by the JK next-state equation `next = (j & ~q) | (~k & q)`:
-  * `j=1, k=0` sets, `j=0, k=1` resets, `j=k=1` toggles, `j=k=0` holds. Because the D flip-flop captures
-  * atomically on the rising edge, `j`/`k` may change freely while the clock is Low (subject to the usual setup
-  * time) — unlike a level-sensitive SR master, there is no race between the master's transparency window and
-  * the slave's feedback.
+  * `j=1, k=0` sets, `j=0, k=1` resets, `j=k=1` toggles, `j=k=0` holds. Because the D flip-flop captures atomically on
+  * the rising edge, `j`/`k` may change freely while the clock is Low (subject to the usual setup time) — unlike a
+  * level-sensitive SR master, there is no race between the master's transparency window and the slave's feedback.
   *
-  * Same timing contract as [[dLatch]]: `j`/`k` stable around the rising clock edge; keep the clock slow enough
-  * for all signals to settle between edges; do not toggle `clear` and `preset` at the same instant.
+  * Same timing contract as [[dLatch]]: `j`/`k` stable around the rising clock edge; keep the clock slow enough for all
+  * signals to settle between edges; do not toggle `clear` and `preset` at the same instant.
   */
 def jkFlipFlop(j: Port, k: Port, clk: Port, clear: Port, preset: Port = High): Spec[(Port, Port)] = newSpec {
   val qAux, nqAux = newPort()
@@ -174,6 +189,11 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
 
 /** A static RAM with 2 ^ `addr.length` words of `ins.length` bits. The RAM is controlled and buffered, allowing read
   * and write activation.
+  *
+  * Contract: the address and the mode must be stable while `we` is High. Each cell is gated by `and(we, sel)`, and the
+  * decoder behind `sel` glitches when the address changes; letting a cell's gate fall shortly after a data change can
+  * leave the cell oscillating instead of settling, which hangs the simulator rather than corrupting a word. (Changing
+  * the address while write is enabled is a violation for a real SRAM too.)
   */
 def ram(ins: Bus, addr: Bus, we: Port, ce: Port): Spec[Bus] = newSpec {
   val select = decoder(addr, High)
