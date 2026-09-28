@@ -247,13 +247,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       var expectedQ = Option.empty[Boolean]
 
       SequentialScenario(comp)
-        .withPorts(d -> false, clock -> true)
-        .withActionFilter { (sim, port, _) =>
-          // Timing contract: D must be stable while the master latch is
-          // transparent (clk low), to meet setup/hold around the closing edge.
-          if (port == d && sim.isLow(clock)) false
-          else true
-        }
+        .withPorts(d, clock -> true)
         .onStart { _ => expectedQ = None }
         .onPosEdge(clock) { sim =>
           expectedQ = sim.get(d).orElse(expectedQ)
@@ -308,14 +302,6 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
       SequentialScenario(comp)
         .withPorts(j -> false, k -> false, clk -> true, clear -> false)
-        .withActionFilter { (sim, port, _) =>
-          // Timing contract: J/K stable while master is transparent (clk low),
-          // and async clear respects recovery/removal (not changed while
-          // the master is transparent).
-          if ((port == j || port == k) && sim.isLow(clk)) false
-          else if (port == clear && sim.isLow(clk)) false
-          else true
-        }
         .onStart { _ => expectedQ = Some(false) }
         .onPosEdge(clk) { sim =>
           expectedQ = (sim.get(j), sim.get(k)) match {
@@ -407,11 +393,6 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         SequentialScenario(comp)
           .withPorts(load -> false, clk -> true, clear -> false, xs -> false)
-          .withActionFilter { (sim, port, _) =>
-            // Timing contract: data inputs stable while master is transparent.
-            if (xs.contains(port) && sim.isLow(clk)) false
-            else true
-          }
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { sim =>
             if (sim.isHigh(load)) {
@@ -475,12 +456,6 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
         SequentialScenario(comp)
           .withPorts(count -> false, clk -> true, clear -> false)
-          .withActionFilter { (sim, port, _) =>
-            // Timing contract: count must be stable before the falling edge
-            // (setup time for the master latch). Block changes while clk is High.
-            if (port == count && sim.isHigh(clk)) false
-            else true
-          }
           .onStart { _ => expectedOut = 0 }
           .onNegEdge(clk) { sim =>
             if (sim.isHigh(count)) {
