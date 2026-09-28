@@ -33,19 +33,6 @@ object GateProcessor {
           case _ => None
         }
 
-      case (p, FlipFlop(set, reset, q, nq)) =>
-        def propagate(s: GateProcessor): GateProcessor = {
-          val res = (s.get(set), s.get(reset)) match {
-            case (Some(true), Some(false)) => Some(true)
-            case (Some(false), Some(true)) => Some(false)
-            case _ => None
-          }
-          res.fold(s) { v =>
-            s.setAfter(gateDelay, q, v).setAfter(gateDelay, nq, !v)
-          }
-        }
-        p.watch(set)(propagate).watch(reset)(propagate)
-
       case (p, Clock(freq, out)) =>
         p.set(out, true).watch(out)(_.toggleAfter(freq, out))
 

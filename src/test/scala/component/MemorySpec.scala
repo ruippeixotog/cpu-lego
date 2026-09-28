@@ -149,6 +149,46 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     }
   }
 
+  "A norLatch" should {
+
+    "start unset" in {
+      val ((q, nq), sim) = buildAndRun { norLatch(new Port, new Port) }
+      sim.get(q) must beNone
+      sim.get(nq) must beNone
+    }
+
+    "set q high when set is driven high" in {
+      val ((q, nq), sim) = buildAndRun { norLatch(High, Low) }
+      sim.get(q) must beSome(true)
+      sim.get(nq) must beSome(false)
+    }
+
+    "set q low when reset is driven high" in {
+      val ((q, nq), sim) = buildAndRun { norLatch(Low, High) }
+      sim.get(q) must beSome(false)
+      sim.get(nq) must beSome(true)
+    }
+
+    "retain its value when both inputs are released" in {
+      val set, reset = newPort()
+      val ((q, nq), comp) = buildComponent { norLatch(set, reset) }
+
+      runPlan(
+        comp,
+        10 -> { _.set(set, Some(false)).set(reset, Some(false)) },
+        20 -> { st => st.get(q) must beNone },
+        30 -> { _.set(set, Some(true)) },
+        40 -> { st => (st.get(q) must beSome(true)) and (st.get(nq) must beSome(false)) },
+        50 -> { _.set(set, Some(false)) },
+        60 -> { st => st.get(q) must beSome(true) },
+        70 -> { _.set(reset, Some(true)) },
+        80 -> { st => (st.get(q) must beSome(false)) and (st.get(nq) must beSome(true)) },
+        90 -> { _.set(reset, Some(false)) },
+        100 -> { st => st.get(q) must beSome(false) }
+      )
+    }
+  }
+
   "A buffered" should {
 
     "pass the bus through when enable is High" in forAll { (ins: Vector[LogicLevel]) =>
@@ -352,7 +392,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         var expectedOuts = Vector.fill(n)(Option.empty[Boolean])
 
         SequentialScenario(comp)
-          .withPorts(load -> false, clk -> true, clear -> false, xs)
+          .withPorts(load -> false, clk -> true, clear -> false, xs -> false)
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { sim =>
             if (sim.isHigh(load)) {

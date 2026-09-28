@@ -106,6 +106,12 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       SequentialScenario(comp)
         .withPorts(prog -> true, write -> false, addrIn -> false, dataIn -> false)
         .withPorts(ins -> false, load -> true, clk -> true, enable -> false)
+        .withActionFilter { (sim, port, _) =>
+          // Write-timing contract: the address and the mode must be stable
+          // while `we` (here `write`) is High, or a cell can be left
+          // oscillating, hanging the simulator (see the contract on `ram`).
+          !(sim.isHigh(write) && (port == prog || addrIn.contains(port) || port == clk))
+        }
         .onStart { _ =>
           mem = Array.fill(16)(Vector.fill(8)(None))
           addrReg = Vector.fill(4)(None)
