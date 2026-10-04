@@ -6,18 +6,19 @@ The SAP-1 built here is as described in [Digital Computer Electronics](https://d
 
 ## Implementation
 
-The goal of this project was to find out a minimal set of building blocks that could be used to construct higher and higher level components (e.g. from logical gates to adders to ALUs) up to a complete CPU - just like LEGOs. I was able to do that with the following four pieces:
+The goal of this project was to find out a minimal set of building blocks that could be used to construct higher and higher level components (e.g. from logical gates to adders to ALUs) up to a complete CPU - just like LEGOs. I was able to do that with the following three pieces:
 
 - `NAND`: the universal logic gate, from which every other boolean function can be expressed.
-- `FlipFlop`: an [SR latch](https://en.wikipedia.org/wiki/Flip-flop_(electronics)#Simple_set-reset_latches), the basic unit of memory. It could theoretically be implemented using two NANDs, but I was finding it hard to avoid race conditions with my current simulator implementation. I may revisit this later.
 - `Clock`: a [clock signal](https://en.wikipedia.org/wiki/Clock_signal) with a configurable frequency. This can also be reproduced using chains of NANDs given they have a non-zero propagation delay, but I decided to make them intrinsic as they are usually implemented outside the realm of digital circuits in the real world as well.
 - `Switch`: a [tristate buffer](https://en.wikipedia.org/wiki/Three-state_logic), required to operate bidirectional shared buses.
 
 Those are the only intrinsic components, implemented at the simulator level. Every other component is built as a function of these, with interactions between them simulated as digital circuits.
 
+Memory needs no intrinsic primitive: the basic unit of storage is the [SR latch](https://en.wikipedia.org/wiki/Flip-flop_(electronics)#Simple_set-reset_latches) built from two NANDs wired in a loop, from which clocked latches (`latchClocked`), D flip-flops (`dLatch`) and JK flip-flops (`jkFlipFlop`) are composed as ordinary circuits. Because the simulator models pure transport delays with no noise, gated latches come with timing contracts: a latch whose gate falls within a few gate delays of a data change may oscillate instead of settling, hanging the simulation rather than corrupting data (see the contracts on `latchClocked` and `ram`).
+
 The project is organized into the following packages:
 
-- `core`: a package containing the core definitions needed for digital circuits, including definitions for the four components described above.
+- `core`: a package containing the core definitions needed for digital circuits, including definitions for the three components described above.
 - `component`: the CPUs definitions and library of components used to build them, organized into different areas (e.g. logic, memory, arithmetic)
 - `computer`: the classes needed to program and run computers. 
 - `simulator`: the implementation of the digital circuit simulator.
