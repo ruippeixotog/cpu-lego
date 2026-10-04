@@ -58,13 +58,7 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
 
     def check(f: GateProcessor => Result) = copy(checkFunc = f)
 
-    /** Skip actions that would violate the DUT's timing contract.
-      *
-      * The filter is evaluated before each generated action; if it returns false, the action is not applied to the
-      * simulator. Use it only where the DUT has a genuine timing contract (e.g. the RAM write contract in
-      * component/sap1/Sap1Spec: the address and the mode must be stable while `we` is High). Note: this weakens
-      * ScalaCheck shrinking for the filtered actions, as the shrinker cannot see through the filter.
-      */
+    /** Skips generated actions for which `f(sim, port, newValue)` returns false. */
     def withActionFilter(f: (GateProcessor, Port, Boolean) => Boolean) = copy(actionFilter = f)
 
     def run(): Prop = {
