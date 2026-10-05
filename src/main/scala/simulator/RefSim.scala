@@ -21,10 +21,10 @@ import core.*
   *
   * A RefSim runs a [[GateProcessor]] — the functional discrete-event engine — in real time:
   *
-  *   - [[set]]/[[unset]] drive ports from any thread; drives are queued together with their offer time and applied
-  *     by the simulation thread at the sim tick corresponding to that time, so a wall-clock separation between two
-  *     drives is preserved in sim time even if the simulation thread was starved in between. A drive is never applied
-  *     in the past: a stale offer time falls back to the current tick.
+  *   - [[set]]/[[unset]] drive ports from any thread; drives are queued together with their offer time and applied by
+  *     the simulation thread at the sim tick corresponding to that time, so a wall-clock separation between two drives
+  *     is preserved in sim time even if the simulation thread was starved in between. A drive is never applied in the
+  *     past: a stale offer time falls back to the current tick.
   *   - [[subscribe]]/[[watch]] observe effective-value changes; each change is delivered exactly once, in simulation
   *     order.
   *   - [[start]] runs the simulation paced at `ticksPerSecond` simulation ticks per second of wall-clock time; [[stop]]
@@ -106,14 +106,14 @@ final class RefSim(
 
   // --- drives: callable from any thread ---
 
-  /** Drive the port; the drive is queued with its offer time and applied by the simulation thread at the
-    * corresponding sim tick when the inbox is next drained.
+  /** Drive the port; the drive is queued with its offer time and applied by the simulation thread at the corresponding
+    * sim tick when the inbox is next drained.
     */
   def set(port: Port, value: Option[Boolean]): Unit =
     inbox.offer(InboxEntry(_.set(port, value), Some(System.nanoTime())))
 
-  /** Drive every port of the bus. All drives share one offer time and are applied together by the simulation thread
-    * at the corresponding sim tick when the inbox is next drained.
+  /** Drive every port of the bus. All drives share one offer time and are applied together by the simulation thread at
+    * the corresponding sim tick when the inbox is next drained.
     */
   def set(bus: Bus, values: Seq[Boolean]): Unit = {
     val nanos = System.nanoTime()
@@ -157,17 +157,22 @@ final class RefSim(
 
   private def ensureObserved(port: Port): Unit =
     if (observedPorts.putIfAbsent(port, ()).isEmpty)
-      inbox.offer(InboxEntry({ s =>
-        val current = s.get(port)
-        // Catch-up: the port's last change may have been processed before this first observer was installed, in
-        // which case no callback would ever report it — yet it is already visible in the published state. Report the
-        // current value if it was never dispatched, so every effective-value change is delivered exactly once even
-        // when it predates the first watcher. This closes the observer-installation race: with the catch-up, a change
-        // is either reported here (processed before install) or by the observer below (processed after install).
-        if (current.isDefined && lastNotified.get(port) != Some(current))
-          pendingNotifications += PortUpdate(port, current)
-        s.watch(port)(s2 => { pendingNotifications += PortUpdate(port, s2.get(port)); s2 })
-      }, None))
+      inbox.offer(
+        InboxEntry(
+          { s =>
+            val current = s.get(port)
+            // Catch-up: the port's last change may have been processed before this first observer was installed, in
+            // which case no callback would ever report it — yet it is already visible in the published state. Report the
+            // current value if it was never dispatched, so every effective-value change is delivered exactly once even
+            // when it predates the first watcher. This closes the observer-installation race: with the catch-up, a change
+            // is either reported here (processed before install) or by the observer below (processed after install).
+            if (current.isDefined && lastNotified.get(port) != Some(current))
+              pendingNotifications += PortUpdate(port, current)
+            s.watch(port)(s2 => { pendingNotifications += PortUpdate(port, s2.get(port)); s2 })
+          },
+          None
+        )
+      )
 
   /** Port changes observed during the current pacing quantum, in simulation order. Buffered on the simulation thread
     * and dispatched only after the new state is published, so an observer that reads back through [[get]] always sees
@@ -224,10 +229,10 @@ final class RefSim(
 
   /** Apply one inbox entry. A stamped drive is advanced to its offer tick first — the sim time corresponding to the
     * wall-clock instant it was offered — so drives land in sim time when they were driven in wall-clock time, even if
-    * the simulation thread was starved while they queued. The `max` keeps the processor from ever moving backwards:
-    * a stale stamp (an offer predating this run's pacing anchor, or a nanosecond race where the loop iterated between
-    * the `set` call and the enqueue) falls back to applying at the current tick, exactly the case where the
-    * simulation is not starved anyway. Unstamped entries apply at the current tick, as before.
+    * the simulation thread was starved while they queued. The `max` keeps the processor from ever moving backwards: a
+    * stale stamp (an offer predating this run's pacing anchor, or a nanosecond race where the loop iterated between the
+    * `set` call and the enqueue) falls back to applying at the current tick, exactly the case where the simulation is
+    * not starved anyway. Unstamped entries apply at the current tick, as before.
     */
   private def applyEntry(p: GateProcessor, e: InboxEntry, startTick: Long, startNanos: Long): GateProcessor = {
     val advanced = e.offerNanos match {

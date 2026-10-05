@@ -36,8 +36,8 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   /** Conservative hardware-style phase bound: every combinational path settles within (components + wires + 1)
     * gate/wire delays of its inputs changing, so holding one bound guarantees the previous drive has propagated
-    * everywhere. In wall-clock milliseconds, through the simulator's pace. The short-circuit tolerance is excluded:
-    * it only governs multi-driver conflicts, not propagation.
+    * everywhere. In wall-clock milliseconds, through the simulator's pace. The short-circuit tolerance is excluded: it
+    * only governs multi-driver conflicts, not propagation.
     */
   val phaseBoundMs: Long = {
     val ticks = (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
@@ -48,8 +48,8 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
   private val ringOut = index.buses("sap1.sequencer.ringCounter.out")
 
   /** A live simulation of the SAP1. Asserts the asynchronous clear, awaits the reset state on the wires — the derived
-    * clock low and the ring counter in its initial state — then releases clear and holds one phase bound so the
-    * release propagates everywhere before anything is driven.
+    * clock low and the ring counter in its initial state — then releases clear and holds one phase bound so the release
+    * propagates everywhere before anything is driven.
     */
   def setup(using ExecutionContext): Future[Sim] = {
     val sim = RefSim(circuit, conf, ticksPerSecond = ticksPerSecond)
@@ -105,8 +105,8 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
       sim2 <- execute(sim)
     } yield sim2
 
-  /** Bit-bang the clock until the program halts. Returns a Future of the stopped simulator. Public so tests can
-    * execute custom load sequences (e.g. loading twice) before running.
+  /** Bit-bang the clock until the program halts. Returns a Future of the stopped simulator. Public so tests can execute
+    * custom load sequences (e.g. loading twice) before running.
     */
   def execute(sim: Sim)(using ExecutionContext): Future[Sim] =
     for {

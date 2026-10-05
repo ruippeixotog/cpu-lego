@@ -1,5 +1,7 @@
 # CPU LEGO
 
+[![CI](https://github.com/ruippeixotog/cpu-lego/actions/workflows/ci.yml/badge.svg)](https://github.com/ruippeixotog/cpu-lego/actions/workflows/ci.yml)
+
 This is an implementation of a digital circuit simulator and the definition of ever-larger components up to SAP-1, [a primitive CPU](https://en.wikipedia.org/wiki/Simple-As-Possible_computer). The goal of this project was to learn (again) what the architecture of a computer looks like.
 
 The SAP-1 built here is as described in [Digital Computer Electronics](https://dl.acm.org/doi/book/10.5555/573742), a book by Albert Paul Malvino.
