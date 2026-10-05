@@ -98,22 +98,21 @@ class CombinationalCellsSpec extends BaseSpec {
     Design("test", Map("dut" -> module))
   }
 
-  /** Imports the cell with the given constant inputs and runs the simulation, returning the settled output.
+  /** Builds the cell once with free input `Port`s, returning the ports, the output port and the settled simulator.
+    * Every input combination is then driven through the same `GateProcessor` instead of rebuilding the circuit.
     */
-  def simulate(cell: CellUnderTest, values: Map[String, Boolean]): Option[Boolean] = {
+  def buildCell(cell: CellUnderTest): (Map[String, Port], Port, GateProcessor) = {
     val design = designFor(cell.cellType, cell.inputs, cell.output)
-    val (y, sim) = buildAndRun {
-      val ins: Map[String, Port | Bus] =
-        cell.inputs.map(n => n -> ((if (values(n)) High else Low): Port | Bus)).toMap
-      ComponentCreator(design).create("dut", ins)(cell.output).asInstanceOf[Port]
+    val ((ins, y), sim) = buildAndRun {
+      val ports: Map[String, Port] = cell.inputs.map(n => n -> new Port()).toMap
+      val out = ComponentCreator(design).create("dut", ports)(cell.output).asInstanceOf[Port]
+      (ports, out)
     }
-    sim.get(y)
+    (ins, y, sim)
   }
 
-  /** Input combinations to check. Fully exhaustive, except for the wide muxes (`$_MUX8_` has 2^11 and `$_MUX16_` 2^20
-    * combinations — infeasible to run one simulation each). A mux output depends only on the select lines and the
-    * selected data input, so for those two we exhaust the selects and toggle the selected input against all-low /
-    * all-high data patterns, which still catches any select/data wiring mistake.
+  /** Input combinations to check: fully exhaustive, except `$_MUX16_` (2^20 combinations), which checks every select
+    * value with the selected input toggled against all-low/all-high data.
     */
   def cases(cell: CellUnderTest): List[Map[String, Boolean]] = {
     def allCombos(names: List[String]): List[Map[String, Boolean]] =
@@ -122,11 +121,10 @@ class CombinationalCellsSpec extends BaseSpec {
       }.toList
 
     cell.cellType match {
-      case t if t == "$_MUX8_" || t == "$_MUX16_" =>
-        val nSel = if (t == "$_MUX8_") 3 else 4
-        val (data, selects) = cell.inputs.splitAt(cell.inputs.length - nSel)
+      case "$_MUX16_" =>
+        val (data, selects) = cell.inputs.splitAt(cell.inputs.length - 4)
         for {
-          sel <- (0 until (1 << nSel)).toList
+          sel <- (0 until (1 << selects.length)).toList
           selVals = selects.zipWithIndex.map { case (n, j) => n -> ((sel >> j & 1) == 1) }.toMap
           selected = data(sel)
           selectedValue <- List(false, true)
@@ -140,9 +138,12 @@ class CombinationalCellsSpec extends BaseSpec {
   cells.foreach { cell =>
     s"${cell.cellType}" should {
       "match the simcells truth table" in {
+        val (ins, y, initialSim) = buildCell(cell)
+        var sim = initialSim
         cases(cell).foreach { values =>
+          sim = cell.inputs.foldLeft(sim) { (s, n) => s.set(ins(n), values(n)) }.run()
           val expected = cell.model(cell.inputs.map(values))
-          (simulate(cell, values) aka s"inputs $values") must beSome(expected)
+          (sim.get(y) aka s"inputs $values") must beSome(expected)
         }
       }
     }
@@ -151,19 +152,11 @@ class CombinationalCellsSpec extends BaseSpec {
   "an unsupported cell" should {
     "fail with the cell type, cell name and src attribute" in {
       val design = designFor("$_UNSUPPORTED_", List("A"), "Y", Map("src" -> "test.v:42"))
-      val outcome =
-        try {
-          buildAndRun {
-            ComponentCreator(design).create("dut", Map("A" -> Low))
-          }
-          None
-        } catch {
-          case e: IllegalArgumentException => Some(e.getMessage)
-        }
-      outcome must beSome
-      outcome.get must contain("$_UNSUPPORTED_")
-      outcome.get must contain("cell0")
-      outcome.get must contain("test.v:42")
+      buildAndRun {
+        ComponentCreator(design).create("dut", Map("A" -> Low))
+      } must throwAn[IllegalArgumentException].like { case e =>
+        e.getMessage must (contain("$_UNSUPPORTED_") and contain("cell0") and contain("test.v:42"))
+      }
     }
   }
 }
