@@ -5,12 +5,8 @@ import core.*
 
 // Word-level building blocks for the DSL.
 //
-// Convention: `bus(0)` is the least significant bit, matching
-// `util.Implicits.toBoolVec` (`Int#toBoolVec`), which also indexes bit 0 as
-// the LSB. All helpers below follow this convention.
-//
-// Structure is plain `Vector` operations — there are no `slice`/`concat`
-// helpers on purpose: use `bus.slice(from, until)` and `a ++ b` directly.
+// `bus(0)` is the LSB, as in `util.Implicits.toBoolVec`.
+// Slicing and concatenation are plain `Vector` ops: `bus.slice(from, until)`, `a ++ b`.
 
 /** A constant `width`-bit bus holding `value` (`bus(0)` is the LSB).
   *
@@ -91,7 +87,8 @@ def xorR(bus: Bus): Spec[Port] = newSpec {
 
 /** Equality with a constant: High iff `bus` holds `value`. */
 def eqConst(bus: Bus, value: Long): Spec[Port] = newSpec {
-  andR(bus.zip(const(bus.length, value)).map(xnor))
+  assert(value >= 0 && value < (1L << bus.length), s"eqConst value $value does not fit in ${bus.length} bits")
+  andR(bus.zip(const(bus.length, value)).map { case (b, c) => if (c == High) b else not(b) })
 }
 
 /** Equality of two buses of equal width: High iff every bit matches. */
@@ -143,13 +140,14 @@ def oneHotMux(words: Seq[Bus], selects: Bus): Spec[Bus] = newSpec {
   */
 def priorityEncoder(bus: Bus): Spec[(Bus, Port)] = newSpec {
   assert(bus.nonEmpty, "Priority encoder needs at least one input")
+  val anyFrom = bus.init.scanRight(bus.last)(or) // anyFrom(i) = OR of bus(i) and above
   val selected = bus.indices.map { i =>
     if (i == bus.length - 1) bus(i)
-    else and(bus(i), not(orM(bus.drop(i + 1)*)))
+    else and(bus(i), not(anyFrom(i + 1)))
   }.toVector
   val outWidth = 32 - Integer.numberOfLeadingZeros(bus.length - 1)
   val out = (0 until outWidth).map { k =>
     orM(selected.zipWithIndex.collect { case (s, i) if ((i >> k) & 1) == 1 => s }*)
   }.toVector
-  (out, orR(bus))
+  (out, anyFrom(0))
 }

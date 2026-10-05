@@ -2,8 +2,8 @@ package component
 
 import component.BuilderAPI.*
 import core.*
-import org.scalacheck.Prop.forAll
 import org.scalacheck.Gen
+import org.scalacheck.Prop.forAll
 import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
