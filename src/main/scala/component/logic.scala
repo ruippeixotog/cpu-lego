@@ -51,3 +51,8 @@ def xnor(in1: Port, in2: Port): Spec[Port] = newSpec {
 def xnorM(ins: Port*): Spec[Port] = newSpec {
   not(multi(xor)(ins*))
 }
+
+// CI-verify: deliberately misformatted
+def   badSpacing( x : Port ) : Spec[Port]   =   newSpec   {   
+  nand(x, x)   
+}
