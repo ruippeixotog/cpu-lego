@@ -24,4 +24,4 @@ jobs:
       - name: Install yosys
         run: sudo apt-get update && sudo apt-get install -y yosys
       - name: Check formatting and lint, run tests
-        run: sbt scalafmtCheckAll scalafixAll --check test
+        run: sbt scalafmtCheckAll "scalafixAll --check" test
