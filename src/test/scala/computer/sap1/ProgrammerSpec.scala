@@ -1,8 +1,7 @@
 package computer.sap1
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext}
 
 import computer.sap1.Instr.*
 import simulator.Sim

@@ -1,12 +1,8 @@
 package simulator
 
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadFactory
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Executors, ThreadFactory, TimeUnit}
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.concurrent.Promise
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 import core.*
 

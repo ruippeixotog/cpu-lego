@@ -1,7 +1,6 @@
 package computer.sap1
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 import component.sap1.*
 import core.*
