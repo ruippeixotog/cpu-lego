@@ -12,17 +12,17 @@ import core.*
 
 /** Synchronization primitives for peripherals driving a live [[Sim]].
   *
-  * A peripheral can only drive wires, read wires, and react to wire changes — the same interface real hardware
-  * exposes. These helpers turn wire observations into Scala `Future`s, so a peripheral can sequence its protocol
-  * without arbitrary wall-clock sleeps and without any knowledge of the simulator's internals (no ticks, no stepping,
-  * no "has the event queue drained" queries, none of which a real peripheral could ask).
+  * A peripheral can only drive wires, read wires, and react to wire changes — the same interface real hardware exposes.
+  * These helpers turn wire observations into Scala `Future`s, so a peripheral can sequence its protocol without
+  * arbitrary wall-clock sleeps and without any knowledge of the simulator's internals (no ticks, no stepping, no "has
+  * the event queue drained" queries, none of which a real peripheral could ask).
   *
   * Race safety: [[awaitCondition]] reads the published state, installs watchers, then reads the published state again.
   * The second read catches any change published before the watcher installation completes; changes processed after
-  * installation are reported by the watchers themselves. The remaining gap — a change processed before installation
-  * but published after the second read — is closed by the simulator: [[RefSim]] reports the port's current value when
-  * the watcher is installed if that value was never dispatched, so no effective-value change the condition depends on
-  * can slip through unnoticed. Every wait therefore observes every relevant change exactly once.
+  * installation are reported by the watchers themselves. The remaining gap — a change processed before installation but
+  * published after the second read — is closed by the simulator: [[RefSim]] reports the port's current value when the
+  * watcher is installed if that value was never dispatched, so no effective-value change the condition depends on can
+  * slip through unnoticed. Every wait therefore observes every relevant change exactly once.
   */
 object Sync {
 
@@ -60,7 +60,11 @@ object Sync {
     if (matches()) Future.successful(())
     else {
       val p = Promise[Unit]()
-      val subs = watchPorts.map(port => sim.watch(port) { _ => if (matches()) p.trySuccess(()); () })
+      val subs = watchPorts.map(port =>
+        sim.watch(port) { _ =>
+          if (matches()) p.trySuccess(()); ()
+        }
+      )
       // Unregister once the outcome is known, whichever thread decides it.
       p.future.onComplete(_ => subs.foreach(_.close()))(ExecutionContext.parasitic)
       // Second read: closes the race between the first read and the watcher installation.
