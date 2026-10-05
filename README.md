@@ -29,8 +29,10 @@ The project is organized into the following packages:
 
 - `core`: a package containing the core definitions needed for digital circuits, including definitions for the three components described above.
 - `component`: the CPUs definitions and library of components used to build them, organized into different areas (e.g. logic, memory, arithmetic)
-- `computer`: the classes needed to program and run computers. 
+- `computer`: the classes needed to program and run computers.
 - `simulator`: the implementation of the digital circuit simulator.
+- `iss`: a cycle-exact NMOS 6502 instruction-set simulator in pure Scala — the golden model for the hand-written DSL 6502. It has no simulator dependency: it talks to memory through a per-cycle `Bus6502` trait (`read`/`write` per bus cycle), and `step()` runs a single bus cycle.
+- `util`: small shared helpers, including `ExternalAssets` (see below).
 
 It makes heavy use of two features introduced by Scala 3:
 
@@ -39,6 +41,17 @@ It makes heavy use of two features introduced by Scala 3:
 - [Metaprogramming](https://docs.scala-lang.org/scala3/reference/metaprogramming/index.html): `newSpec` is a macro used throughout component definitions as a way to define the boundaries of a logical component. It doesn't change the behavior of the code it wraps, but it collects information about the function's context (such as its name and name of their arguments) to allow for a better representation of the circuit at runtime (e.g. referencing ports by their name). `newPort` is another example of a macro-powered constructor.
 
 - [Singleton and compile-time integer types](https://docs.scala-lang.org/scala3/reference/metaprogramming/compiletime-ops.html): `Bus[N]` carries its width in its type, so wiring an 8-bit bus into a 4-bit input does not compile. `N` is a literal (`Bus[8]`), a type parameter for width-generic components, or `n.type` for a width passed by value (`counter(n, ...)` returns `Bus[n.type]`). Arithmetic on widths works on constants (`decoder` on a `Bus[4]` returns `Bus[1 << 4]`, i.e. `Bus[16]`), but the compiler can't prove identities over abstract widths such as `N + 1 = 1 + N`; `Bus` has width-preserving combinators (`map`, `zipMap`, `chain`, `zipMapAccum`, `shiftUp`, `rotateUp`, `Bus.tabulate`...) so that components rarely need to do any, and the few that do use the runtime-checked `Bus.sized`. Indexing is checked too: `bus(3)` must be a constant in range, or a `Bus.Index[N]` from `mapWithIndex`, `tabulate` or `indices`, and `bus.get(i)` is the unchecked form for computed indices like `i - 1`. `Bus[Int]` is a bus whose width is only known at runtime, and component asserts still check it. The simulators work on raw `Ports`.
+
+## External test assets
+
+Some tests need data files that are too large to vendor in the repo — e.g. the [SingleStepTests](https://github.com/SingleStepTests/65x02) 6502 suites used to validate the `iss` package cycle-by-cycle. `util.ExternalAssets` is the single place that knows where those files live:
+
+- if `$CPU_LEGO_ASSETS/<name>` already exists it is used as-is, so a file you drop in by hand always wins;
+- otherwise the file is fetched once from its URL and cached there.
+
+The default cache directory is `~/.cache/cpu-lego`; set `$CPU_LEGO_ASSETS` to override it. When an asset cannot be obtained (no network, fetch failed), the tests that need it skip with a clear message instead of failing. In restricted environments, pre-populate the cache directory by hand (e.g. with curl) and the tests will pick the files up without any download.
+
+The SingleStepTests suites run sampled by default (every 32nd test per opcode); set `CPU_LEGO_SINGLESTEP_FULL=1` to run the full set.
 
 ## License
 
