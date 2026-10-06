@@ -8,24 +8,24 @@ class NetlistSpec extends Specification {
   "Netlist" should {
 
     "merge nets across hierarchy levels" in {
-      // p3 is shared by the NANDs in the two inner components, joined through two hierarchy levels
-      val p1 = new Port
-      val p2 = new Port
-      val p3 = new Port
-      val p4 = new Port
-      val n1 = NAND(p1, p2, p3)
-      val n2 = NAND(p3, p4, new Port)
-      val inner1 = CompositeComponent("inner1", Map("g" -> n1), Nil, Map())
-      val inner2 = CompositeComponent("inner2", Map("g" -> n2), Nil, Map())
-      val mid = CompositeComponent("mid", Map("a" -> inner1, "b" -> inner2), Nil, Map())
+      // distinct ports joined by wires declared at different hierarchy levels land on one net
+      val n1out = new Port
+      val x = new Port
+      val y = new Port
+      val n2in1 = new Port
+      val n1 = NAND(new Port, new Port, n1out)
+      val n2 = NAND(n2in1, new Port, new Port)
+      val inner1 = CompositeComponent("inner1", Map("g" -> n1), List((n1out, x)), Map())
+      val inner2 = CompositeComponent("inner2", Map("g" -> n2), List((y, n2in1)), Map())
+      val mid = CompositeComponent("mid", Map("a" -> inner1, "b" -> inner2), List((x, y)), Map())
       val top = CompositeComponent("top", Map("m" -> mid), Nil, Map())
 
       val nl = Netlist(top)
-      // p3 on one net across both inner components; the rest on distinct nets
-      (nl.netOf(p3) >= 2) must beTrue
-      nl.netOf(p1) must not(beEqualTo(nl.netOf(p3)))
-      nl.netOf(p1) must not(beEqualTo(nl.netOf(p4)))
-      nl.netOf(p3) must not(beEqualTo(nl.netOf(p4)))
+      val net = nl.netOf(n1out)
+      (net >= 2) must beTrue
+      nl.netOf(x) must beEqualTo(net)
+      nl.netOf(y) must beEqualTo(net)
+      nl.netOf(n2in1) must beEqualTo(net)
     }
 
     "reserve constant nets for High and Low" in {
@@ -72,14 +72,18 @@ class NetlistSpec extends Specification {
       // undriven input nets have no drivers
       nl.driversOf(nl.netOf(a)) must beEmpty
 
-      // a switch enable is a reader; the switch output is neither driver nor reader
+      // a switch enable is a reader; the switch output is a tri-state driver but not a reader
       val en = new Port
       val sw = Switch(a, new Port, en)
       val nl2 = Netlist(CompositeComponent("top", Map("s" -> sw), Nil, Map()))
       val enReaders = nl2.readersOf(nl2.netOf(en))
       enReaders.length must beEqualTo(1)
       Netlist.refKind(enReaders(0)) must beEqualTo(Netlist.SwitchKind)
-      nl2.driversOf(nl2.netOf(sw.out)) must beEmpty
+      val swDrivers = nl2.driversOf(nl2.netOf(sw.out))
+      swDrivers.length must beEqualTo(1)
+      Netlist.refKind(swDrivers(0)) must beEqualTo(Netlist.SwitchKind)
+      Netlist.refIndex(swDrivers(0)) must beEqualTo(0)
+      nl2.switchOut(Netlist.refIndex(swDrivers(0))) must beEqualTo(nl2.netOf(sw.out))
       nl2.readersOf(nl2.netOf(sw.out)) must beEmpty
     }
 
@@ -97,7 +101,7 @@ class NetlistSpec extends Specification {
       val top = CompositeComponent(
         "top",
         Map("c" -> child),
-        Nil,
+        List((childOut, out)),
         Map(
           "in" -> (Some(Direction.Input), in),
           "data" -> (Some(Direction.Inout), bus),
@@ -116,7 +120,11 @@ class NetlistSpec extends Specification {
       nl.nameOf(nl.netOf(in)) must beSome("in")
       nl.nameOf(nl.netOf(bus(1))) must beSome("data[1]")
       // the child's named port is namespaced under the child
-      nl.netNames.values must contain("c.cout")
+      nl.names.keys must contain("c.cout")
+      // every named port stays reachable, even when several merge into one net
+      nl.names("c.cout") must beEqualTo(nl.netOf(childOut))
+      nl.names("out") must beEqualTo(nl.netOf(out))
+      nl.names("c.cout") must beEqualTo(nl.names("out"))
     }
 
     "keep Circuit's groupOf/portsOf consistent" in {
@@ -130,7 +138,10 @@ class NetlistSpec extends Specification {
 
       circuit.groupOf(a) must beEqualTo(circuit.groupOf(High))
       circuit.groupOf(a) must not(beEqualTo(circuit.groupOf(b)))
-      circuit.groupOf(c) must beEqualTo(circuit.groupOf(c))
+      // c is joined to the rest only through components: its own group, distinct from a's and b's
+      circuit.groupOf(c) must not(beEqualTo(circuit.groupOf(a)))
+      circuit.groupOf(c) must not(beEqualTo(circuit.groupOf(b)))
+      circuit.portsOf(circuit.groupOf(c)) must beEqualTo(Set(c))
 
       val group = circuit.groupOf(a)
       circuit.portsOf(group) must contain(a, High)
@@ -163,8 +174,7 @@ class NetlistSpec extends Specification {
 
     "flatten 10^6 NANDs in linear time" in {
       // 1000 instances of a 1000-gate random combinational block, wired through a bus.
-      // Times both 10^5 and 10^6 NANDs: flattening must scale linearly (the old recursive
-      // Circuit.apply was quadratic in the number of children), so the ratio must stay
+      // Times both 10^5 and 10^6 NANDs: flattening must scale linearly, so the ratio must stay
       // far below the 100x a quadratic implementation would show. Absolute times are
       // printed for the record; they depend on the machine.
       def design(instCount: Int, gatesPerInst: Int): Component = {

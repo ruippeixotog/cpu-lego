@@ -20,13 +20,13 @@ import core.*
   *   - Clock: `clockHalfPeriod`, `clockOut`
   *
   * Per-net driver and reader lists are CSR arrays (`driverOffsets`/`driverEntries`, `readerOffsets`/`readerEntries`).
-  * Entries pack a primitive reference; see [[Netlist.packRef]]. Drivers are NAND and Clock outputs; readers are NAND
-  * inputs and Switch in/enable inputs. Switch outputs are pass-through ports and appear in neither list. The constant
-  * nets carry no driver entries.
+  * Entries pack a primitive reference; see [[Netlist.packRef]]. Drivers are NAND and Clock outputs plus Switch outputs
+  * (switches are tri-state drivers: `GateProcessor.setup` drives `out` to `in` while enabled and to `None` otherwise);
+  * readers are NAND inputs and Switch in/enable inputs. The constant nets carry no driver entries.
   *
-  * `netNames` maps net ids to hierarchical port names (`a.b.c`, `bus[i]`, following [[Index]]'s scheme); when several
-  * named ports merge into one net the first name encountered wins. `pins` are the top-level component's `namedPorts`
-  * with directions and net ids (buses expanded to one pin per element).
+  * `names` maps every hierarchical port name (`a.b.c`, `bus[i]`, following [[Index]]'s scheme) to its net id, so any
+  * named port stays reachable even when several merge into one net; `nameOf` derives a display name per net. `pins` are
+  * the top-level component's `namedPorts` with directions and net ids (buses expanded to one pin per element).
   *
   * All arrays are treated as immutable after construction.
   */
@@ -57,28 +57,21 @@ final class Netlist private (
     val clockOut: Array[Int],
     /** CSR offsets into `driverEntries`, length `netCount + 1`. */
     val driverOffsets: Array[Int],
-    /** Packed primitive references driving each net (NAND and Clock outputs only). */
+    /** Packed primitive references driving each net (NAND outputs, Switch outputs and Clock outputs). */
     val driverEntries: Array[Int],
     /** CSR offsets into `readerEntries`, length `netCount + 1`. */
     val readerOffsets: Array[Int],
     /** Packed primitive references reading each net (NAND inputs, Switch in/enable). */
     val readerEntries: Array[Int],
-    /** Net id -> hierarchical name, for nets with at least one named port. */
-    val netNames: Map[Int, String],
+    /** Hierarchical name -> net id, for every named port. */
+    val names: Map[String, Int],
+    /** Hierarchical names in first-encountered order, for display-name derivation. */
+    private val orderedNames: Vector[(String, Int)],
     /** The top-level component's named ports, with directions and net ids. */
     val pins: Vector[Netlist.Pin],
     /** Summary counts. */
     val stats: Netlist.Stats,
-    /** Flattened wire pairs as port ids, in traversal order. */
-    val wireA: Array[Int],
-    /** Flattened wire pairs as port ids, in traversal order. */
-    val wireB: Array[Int],
-    private val portIds: IdentityHashMap[Port, Integer],
-    private val primKind: Array[Int],
-    private val primA: Array[Int],
-    private val primB: Array[Int],
-    private val primC: Array[Int],
-    private val primAux: Array[Int]
+    private val portIds: IdentityHashMap[Port, Integer]
 ) {
 
   /** Number of interned ports. */
@@ -108,22 +101,13 @@ final class Netlist private (
   /** Packed reader references reading `net`. See [[Netlist.refKind]] and [[Netlist.refIndex]]. */
   def readersOf(net: Int): Array[Int] = readerEntries.slice(readerOffsets(net), readerOffsets(net + 1))
 
-  /** Hierarchical name of `net`, if any named port maps to it. */
-  def nameOf(net: Int): Option[String] = netNames.get(net)
+  /** A display name for `net`: the first hierarchical name recorded for it, if any. */
+  def nameOf(net: Int): Option[String] = displayNames.get(net)
 
-  /** The flattened primitive components, in traversal order, wrapping the original ports. */
-  def baseComponents: List[BaseComponent] = {
-    val b = List.newBuilder[BaseComponent]
-    var i = 0
-    while (i < primKind.length) {
-      primKind(i) match {
-        case Netlist.NandKind => b += NAND(ports(primA(i)), ports(primB(i)), ports(primC(i)))
-        case Netlist.SwitchKind => b += Switch(ports(primA(i)), ports(primB(i)), ports(primC(i)))
-        case Netlist.ClockKind => b += Clock(primAux(i), ports(primB(i)))
-      }
-      i += 1
-    }
-    b.result()
+  private lazy val displayNames: Map[Int, String] = {
+    val m = mutable.LinkedHashMap[Int, String]()
+    orderedNames.foreach { case (name, net) => m.getOrElseUpdate(net, name) }
+    m.toMap
   }
 
   private lazy val membersByNet: Map[Int, Set[Port]] = {
@@ -185,7 +169,21 @@ object Netlist {
     */
   def apply(root: Component, extraWires: List[(Port, Port)] = Nil): Netlist = {
     val b = new Builder
+    traverse(root, extraWires, b)
+    assemble(b)
+  }
 
+  /** Like [[apply]], additionally returning the flattened components and wires in traversal order. */
+  private[simulator] def parts(
+      root: Component,
+      extraWires: List[(Port, Port)]
+  ): (Netlist, List[BaseComponent], List[(Port, Port)]) = {
+    val b = new Builder
+    traverse(root, extraWires, b)
+    (assemble(b), b.components.toList, b.wires.toList)
+  }
+
+  private def traverse(root: Component, extraWires: List[(Port, Port)], b: Builder): Unit = {
     root match {
       case cc: CompositeComponent =>
         cc.namedPorts.foreach {
@@ -197,16 +195,15 @@ object Netlist {
     }
     extraWires.foreach { case (a, c) => b.addWire(a, c) }
 
-    // Iterative depth-first traversal; children pushed reversed so they pop in `components` order,
-    // matching the old recursive Circuit.apply.
+    // Iterative depth-first traversal; children pushed reversed so they pop in `components` order.
     val stack = new java.util.ArrayDeque[(Component, String)]()
     stack.push((root, ""))
     while (!stack.isEmpty) {
       val (comp, path) = stack.pop()
       comp match {
-        case NAND(in1, in2, out) => b.addNand(in1, in2, out)
-        case Clock(freq, out) => b.addClock(freq, out)
-        case Switch(in, out, en) => b.addSwitch(in, out, en)
+        case n: NAND => b.addNand(n)
+        case c: Clock => b.addClock(c)
+        case s: Switch => b.addSwitch(s)
         case cc: CompositeComponent =>
           val prefix = if (path.isEmpty) "" else path + "."
           cc.namedPorts.foreach {
@@ -224,17 +221,15 @@ object Netlist {
           }
       }
     }
-
-    assemble(b)
   }
 
   /** Build from an already-flat component and wire list. */
   private[simulator] def fromFlat(components: List[BaseComponent], wires: List[(Port, Port)]): Netlist = {
     val b = new Builder
     components.foreach {
-      case NAND(in1, in2, out) => b.addNand(in1, in2, out)
-      case Clock(freq, out) => b.addClock(freq, out)
-      case Switch(in, out, en) => b.addSwitch(in, out, en)
+      case n: NAND => b.addNand(n)
+      case c: Clock => b.addClock(c)
+      case s: Switch => b.addSwitch(s)
     }
     wires.foreach { case (a, c) => b.addWire(a, c) }
     assemble(b)
@@ -243,6 +238,8 @@ object Netlist {
   private final class Builder {
     val portIds = new IdentityHashMap[Port, Integer]()
     val portList = new ArrayBuffer[Port]()
+    val components = new ArrayBuffer[BaseComponent]()
+    val wires = new ArrayBuffer[(Port, Port)]()
     val primKind = new ArrayBuffer[Int]()
     val primA = new ArrayBuffer[Int]()
     val primB = new ArrayBuffer[Int]()
@@ -264,31 +261,35 @@ object Netlist {
       }
     }
 
-    def addNand(in1: Port, in2: Port, out: Port): Unit = {
+    def addNand(n: NAND): Unit = {
+      components += n
       primKind += NandKind
-      primA += idOf(in1)
-      primB += idOf(in2)
-      primC += idOf(out)
+      primA += idOf(n.in1)
+      primB += idOf(n.in2)
+      primC += idOf(n.out)
       primAux += 0
     }
 
-    def addSwitch(in: Port, out: Port, en: Port): Unit = {
+    def addSwitch(s: Switch): Unit = {
+      components += s
       primKind += SwitchKind
-      primA += idOf(in)
-      primB += idOf(out)
-      primC += idOf(en)
+      primA += idOf(s.in)
+      primB += idOf(s.out)
+      primC += idOf(s.enable)
       primAux += 0
     }
 
-    def addClock(halfPeriod: Int, out: Port): Unit = {
+    def addClock(c: Clock): Unit = {
+      components += c
       primKind += ClockKind
       primA += -1
-      primB += idOf(out)
+      primB += idOf(c.out)
       primC += -1
-      primAux += halfPeriod
+      primAux += c.freq
     }
 
     def addWire(a: Port, c: Port): Unit = {
+      wires += ((a, c))
       wireA += idOf(a)
       wireB += idOf(c)
     }
@@ -411,10 +412,12 @@ object Netlist {
       i += 1
     }
 
-    // CSR driver lists: NAND and Clock outputs.
+    // CSR driver lists: NAND and Clock outputs, plus Switch outputs (tri-state drivers).
     val driverCounts = new Array[Int](netCount)
     i = 0
     while (i < nNands) { driverCounts(nandOut(i)) += 1; i += 1 }
+    i = 0
+    while (i < nSwitches) { driverCounts(switchOut(i)) += 1; i += 1 }
     i = 0
     while (i < nClocks) { driverCounts(clockOut(i)) += 1; i += 1 }
     val driverOffsets = new Array[Int](netCount + 1)
@@ -428,6 +431,13 @@ object Netlist {
     while (i < nNands) {
       val net = nandOut(i)
       driverEntries(dcur(net)) = packRef(NandKind, i)
+      dcur(net) += 1
+      i += 1
+    }
+    i = 0
+    while (i < nSwitches) {
+      val net = switchOut(i)
+      driverEntries(dcur(net)) = packRef(SwitchKind, i)
       dcur(net) += 1
       i += 1
     }
@@ -469,8 +479,10 @@ object Netlist {
       i += 1
     }
 
-    val netNames = mutable.HashMap[Int, String]()
-    b.names.foreach { case (portId, name) => netNames.getOrElseUpdate(netOfPort(portId), name) }
+    // Every hierarchical name stays reachable, mapped to its net id; display names
+    // keep first-encountered order.
+    val orderedNames = b.names.map { case (portId, name) => (name, netOfPort(portId)) }.toVector
+    val names = orderedNames.toMap
 
     val pins = b.pins.map { case (name, dir, portId) => Pin(name, dir, netOfPort(portId)) }.toVector
 
@@ -500,17 +512,11 @@ object Netlist {
       driverEntries = driverEntries,
       readerOffsets = readerOffsets,
       readerEntries = readerEntries,
-      netNames = netNames.toMap,
+      names = names,
+      orderedNames = orderedNames,
       pins = pins,
       stats = stats,
-      wireA = b.wireA.toArray,
-      wireB = b.wireB.toArray,
-      portIds = b.portIds,
-      primKind = b.primKind.toArray,
-      primA = b.primA.toArray,
-      primB = b.primB.toArray,
-      primC = b.primC.toArray,
-      primAux = b.primAux.toArray
+      portIds = b.portIds
     )
   }
 }
