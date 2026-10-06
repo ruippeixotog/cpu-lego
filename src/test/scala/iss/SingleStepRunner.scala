@@ -172,17 +172,20 @@ object SingleStepRunner {
   }
 
   private def parseRam(v: Value): Map[Int, Int] =
-    v.obj("ram").arr.map { entry =>
-      val pair = entry.arr
-      pair(0).num.toInt -> pair(1).num.toInt
-    }.toMap
+    v.obj("ram")
+      .arr
+      .map { entry =>
+        val pair = entry.arr
+        pair(0).num.toInt -> pair(1).num.toInt
+      }
+      .toMap
 
   private def parseCycle(v: Value): BusCycle = {
     val entry = v.arr
     entry(2).str match {
-      case "read"  => BusCycle(entry(0).num.toInt, entry(1).num.toInt, write = false)
+      case "read" => BusCycle(entry(0).num.toInt, entry(1).num.toInt, write = false)
       case "write" => BusCycle(entry(0).num.toInt, entry(1).num.toInt, write = true)
-      case rw      => throw new IllegalArgumentException(s"bad cycle direction: $rw")
+      case rw => throw new IllegalArgumentException(s"bad cycle direction: $rw")
     }
   }
 

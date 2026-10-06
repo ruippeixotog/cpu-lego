@@ -6,8 +6,8 @@ import Cpu6502.Step
   *
   * The core is a table-driven state machine: each documented opcode decodes to the list of micro-steps executed after
   * its fetch cycle (the fetch itself is done by [[Cpu6502.step]]). Every step performs exactly one bus cycle; any
-  * register or latch updates ride along on that cycle. This keeps cycle exactness reviewable: each program reads as
-  * the documented cycle sequence.
+  * register or latch updates ride along on that cycle. This keeps cycle exactness reviewable: each program reads as the
+  * documented cycle sequence.
   *
   * Addressing modes are shared fragments parameterized by what happens on the final data cycle: `commit` for reads
   * (internal updates, no bus access) and `value` for writes. Indexed read modes ((zp),Y, abs,X, abs,Y) need a
