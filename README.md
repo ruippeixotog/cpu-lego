@@ -24,7 +24,7 @@ The project is organized into the following packages:
 - `component`: the CPUs definitions and library of components used to build them, organized into different areas (e.g. logic, memory, arithmetic)
 - `computer`: the classes needed to program and run computers.
 - `simulator`: the implementation of the digital circuit simulator.
-- `iss`: a cycle-exact NMOS 6502 instruction-set simulator in pure Scala — the golden model for the hand-written DSL 6502. It has no simulator dependency: it talks to memory through a per-cycle `Bus6502` trait (`read`/`write` per bus cycle), and `step()` runs a single bus cycle.
+- `iss`: a cycle-exact NMOS 6502 instruction-set simulator in pure Scala.
 - `util`: small shared helpers, including `ExternalAssets` (see below).
 
 It makes heavy use of two features introduced by Scala 3:

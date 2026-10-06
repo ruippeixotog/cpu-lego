@@ -5,14 +5,14 @@ import Cpu6502.Step
 /** A cycle-exact NMOS 6502 instruction-set simulator, in pure Scala.
   *
   * This is the golden model for the hand-written DSL 6502: it reproduces every bus cycle of every documented opcode —
-  * including dummy reads and writes — because the Apple II soft switches react to them. It has no dependency on the
-  * gate-level simulator; it talks to memory through [[Bus6502]] only.
+  * including dummy reads and writes. It has no dependency on the gate-level simulator; it talks to memory through
+  * [[Bus6502]] only.
   *
   * The core is a table-driven state machine (see [[Microcode]]): each documented opcode decodes to the list of
   * micro-steps executed after its fetch cycle, and [[step]] runs exactly one bus cycle. Undocumented opcodes decode to
-  * an empty program, i.e. every `step` just fetches the next opcode; they are fully decoded in #58.
+  * an empty program (single-cycle NOP): every `step` just fetches the next opcode.
   *
-  * Interrupts, reset, RDY and SO are wired up in #57; the [[irq]] and [[nmi]] lines are accepted but not serviced yet.
+  * Interrupts, reset, RDY and SO are not implemented yet.
   */
 class Cpu6502(val bus: Bus6502) {
 
@@ -35,14 +35,6 @@ class Cpu6502(val bus: Bus6502) {
 
   /** Program counter. */
   var pc: Int = 0
-
-  // --- interrupt lines (serviced in #57) ---
-
-  /** Interrupt request line (level-sensitive). */
-  var irq: Boolean = false
-
-  /** Non-maskable interrupt line (edge-sensitive). */
-  var nmi: Boolean = false
 
   // --- internal latches ---
 

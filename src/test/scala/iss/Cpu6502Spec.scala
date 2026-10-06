@@ -64,7 +64,7 @@ class Cpu6502Spec extends Specification {
       (cpu.p & Cpu6502.FlagU) must beEqualTo(Cpu6502.FlagU)
     }
 
-    "treat undocumented opcodes as single-cycle NOPs until #58" in {
+    "treat undocumented opcodes as single-cycle NOPs" in {
       val bus = new RecordingBus(Map(0x1000 -> 0x02))
       val cpu = new Cpu6502(bus)
       cpu.pc = 0x1000
@@ -74,19 +74,6 @@ class Cpu6502Spec extends Specification {
       cpu.pc must beEqualTo(0x1001)
       cpu.idle must beTrue
       bus.cycles must beEqualTo(Vector(BusCycle(0x1000, 0x02, write = false)))
-    }
-
-    "leave the interrupt lines unserviced until #57" in {
-      val bus = new RecordingBus(Map(0x1000 -> 0xea))
-      val cpu = new Cpu6502(bus)
-      cpu.pc = 0x1000
-      cpu.irq = true
-      cpu.nmi = true
-
-      cpu.step(); cpu.step()
-
-      cpu.pc must beEqualTo(0x1001)
-      cpu.idle must beTrue
     }
   }
 }
