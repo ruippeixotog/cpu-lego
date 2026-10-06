@@ -6,6 +6,13 @@ This is an implementation of a digital circuit simulator and the definition of e
 
 The SAP-1 built here is as described in [Digital Computer Electronics](https://dl.acm.org/doi/book/10.5555/573742), a book by Albert Paul Malvino.
 
+## Requirements
+
+- JDK 25 LTS (Temurin recommended).
+- [sbt](https://www.scala-sbt.org/) 1.10.x.
+
+Build and test with `sbt test`. Run the apps with `sbt "runMain computer.i8080.VM80aApp"` (VM80A) or `sbt "runMain computer.sap1.SAP1App"` (SAP-1); apps run in a forked JVM with generational ZGC enabled.
+
 ## Implementation
 
 The goal of this project was to find out a minimal set of building blocks that could be used to construct higher and higher level components (e.g. from logical gates to adders to ALUs) up to a complete CPU - just like LEGOs. I was able to do that with the following three pieces:
