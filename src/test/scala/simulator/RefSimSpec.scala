@@ -1,5 +1,6 @@
 package simulator
 
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentLinkedQueue, LinkedBlockingQueue}
 
 import scala.collection.concurrent.TrieMap
@@ -160,6 +161,46 @@ class RefSimSpec extends BaseSpec {
       } finally {
         sim.stop()
         sub.close()
+      }
+    }
+
+    "never publish a half-advanced state to concurrent readers" in {
+      // 8 input ports feeding 4 NANDs. Every bus drive sets all 8 ports together, so a consistent read never mixes
+      // true and false — even while the simulation thread is applying the drive mid-quantum.
+      val ins = Vector.fill(8)(newPort())
+      val gates = (0 until 4).map { i => NAND(ins(2 * i), ins(2 * i + 1), newPort()) }.toList
+      val sim = RefSim(Circuit(gates, Nil))
+      val subs = ins.map(sim.subscribe)
+
+      sim.start()
+      try {
+        val mixed = new AtomicInteger(0)
+        val stop = new AtomicBoolean(false)
+        val reader = new Thread(() => {
+          while (!stop.get()) {
+            val values = sim.get(ins).flatten
+            if (values.contains(true) && values.contains(false)) mixed.incrementAndGet()
+          }
+        })
+        reader.setDaemon(true)
+        reader.start()
+        try {
+          var i = 0
+          val deadline = System.currentTimeMillis() + 5000
+          while (i < 2000 && System.currentTimeMillis() < deadline) {
+            sim.set(ins, Seq.fill(8)(i % 2 == 0))
+            Thread.sleep(1)
+            i += 1
+          }
+        } finally {
+          stop.set(true)
+          reader.join(5000)
+        }
+        // every published snapshot applies a whole bus drive at once
+        mixed.get() must beEqualTo(0)
+      } finally {
+        subs.foreach(_.close())
+        sim.stop()
       }
     }
 

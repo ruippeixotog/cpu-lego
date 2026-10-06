@@ -1,29 +1,19 @@
 package simulator
 
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadFactory
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.{CopyOnWriteArrayList, Executors, LinkedBlockingQueue, ThreadFactory, TimeUnit}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 import core.*
 
 /** A live simulator over any [[Engine]]: a thread-safe [[Sim]] running a deterministic simulation, paced against the
   * wall clock.
   *
-  * This is the split of the old `RefSim` into two halves:
-  *
-  *   - the [[Engine]] owns the deterministic simulation core — driving ports, advancing time, observing value changes;
-  *   - `LiveSim` owns the live, concurrent machinery around it — the inbox, the paced loop, the published state, the
-  *     notifier, the watchers.
+  * Owns the concurrent machinery (inbox, paced loop, published state, notifier) around a single-threaded [[Engine]];
+  * [[RefSim]] runs it over the gate-level engine.
   *
   * A compiled backend reuses all of this by supplying its own `Engine`; the reference gate-level simulator is just
   * `LiveSim(() => GateEngine(GateProcessor.setup(circuit, conf)), ticksPerSecond)` (see [[RefSim]]).
@@ -33,15 +23,14 @@ import core.*
   *   - The engine is confined to the simulation thread. The `newEngine` factory is invoked once, on the constructing
   *     thread; every later `Engine` call — drives, `runTo`, `watch` — happens on the simulation thread. Engine
   *     implementations need no internal synchronization.
-  *   - The published state is an `AtomicReference[Engine]`. After each pacing quantum (and after applying a polled
-  *     inbox entry) the simulation thread re-publishes the engine reference; that volatile write is the happens-before
-  *     edge that makes the engine's internal state safely visible to reader threads. Behind the [[GateEngine]] adapter
-  *     this is publish-by-reference of the immutable [[GateProcessor]], exactly as before: a reader always sees a
-  *     complete, consistent engine state, never a half-advanced one.
+  *   - The published state is an `AtomicReference[EngineState]`. After each pacing quantum (and after applying a polled
+  *     inbox entry) the simulation thread publishes an immutable snapshot; that volatile write is the happens-before
+  *     edge that makes the snapshot safely visible to reader threads. A reader always sees a complete, consistent
+  *     engine state, never a half-advanced one.
   *   - Drives are queued, `get` reads the last published state without locking, and observer callbacks run on a
   *     separate single-threaded notifier. All threads are daemon threads.
   *
-  * The subtle guarantees are unchanged from the old `RefSim`:
+  * Its guarantees:
   *
   *   - [[set]]/[[unset]] drive ports from any thread; drives are queued together with their offer time and applied by
   *     the simulation thread at the sim tick corresponding to that time, so a wall-clock separation between two drives
@@ -60,18 +49,21 @@ import core.*
   * @param ticksPerSecond
   *   simulation ticks per wall-clock second while running
   */
-final class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim {
+class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim {
   require(ticksPerSecond > 0, "ticksPerSecond must be positive")
 
   private type Action = Engine => Unit
 
   /** An inbox entry: the action plus the wall-clock instant it was offered. Drives carry their offer time so they can
     * be applied at the corresponding sim tick; entries with no drive-timing meaning (the stop wake-up, observer
-    * installs) carry `None` and apply at the current tick, as before.
+    * installs) carry `None` and apply at the current tick.
     */
   private case class InboxEntry(action: Action, offerNanos: Option[Long])
 
-  private val published = new AtomicReference[Engine](newEngine())
+  // The engine itself, touched only by the simulation thread. Readers never see it: they read the immutable snapshots
+  // published below.
+  private val engine: Engine = newEngine()
+  private val published = new AtomicReference[EngineState](engine.snapshot)
   private val inbox = new LinkedBlockingQueue[InboxEntry]()
   private val running = new AtomicBoolean(false)
   private val generation = new AtomicLong(0)
@@ -128,10 +120,8 @@ final class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extend
   /** Drive every port of the bus. All drives share one offer time and are applied together by the simulation thread at
     * the corresponding sim tick when the inbox is next drained.
     */
-  def set(bus: Bus, values: Seq[Boolean]): Unit = {
-    val nanos = System.nanoTime()
-    inbox.offer(InboxEntry(e => bus.zip(values).foreach { case (port, v) => e.set(port, Some(v)) }, Some(nanos)))
-  }
+  def set(bus: Bus, values: Seq[Boolean]): Unit =
+    inbox.offer(InboxEntry(_.set(bus, values), Some(System.nanoTime())))
 
   // --- reads ---
 
@@ -180,7 +170,7 @@ final class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extend
             // is either reported here (processed before install) or by the observer below (processed after install).
             if (current.isDefined && lastNotified.get(port) != Some(current))
               pendingNotifications += PortUpdate(port, current)
-            e.watch(port)(_ => pendingNotifications += PortUpdate(port, e.get(port)))
+            e.watch(port)(v => pendingNotifications += PortUpdate(port, v))
           },
           None
         )
@@ -214,30 +204,32 @@ final class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extend
   // --- paced loop ---
 
   private def realtimeLoop(gen: Long): Unit = {
-    val startTick = published.get().tick
+    val startTick = engine.tick
     val startNanos = System.nanoTime()
     while (running.get() && generation.get() == gen) {
       val deadline = startTick + saturatingTicks(System.nanoTime() - startNanos, ticksPerSecond)
-      val e = drain(published.get(), startTick, startNanos)
-      e.runTo(deadline)
-      published.set(e)
+      drain(startTick, startNanos)
+      engine.runTo(deadline)
+      published.set(engine.snapshot)
       dispatchNotifications()
       try {
         val entry = inbox.poll(QuantumMillis, TimeUnit.MILLISECONDS)
-        if (entry != null) published.set(applyEntry(published.get(), entry, startTick, startNanos))
+        if (entry != null) {
+          applyEntry(entry, startTick, startNanos)
+          published.set(engine.snapshot)
+        }
       } catch {
         case _: InterruptedException => running.set(false)
       }
     }
   }
 
-  private def drain(e: Engine, startTick: Long, startNanos: Long): Engine = {
+  private def drain(startTick: Long, startNanos: Long): Unit = {
     var entry = inbox.poll()
     while (entry != null) {
-      applyEntry(e, entry, startTick, startNanos)
+      applyEntry(entry, startTick, startNanos)
       entry = inbox.poll()
     }
-    e
   }
 
   /** Apply one inbox entry. A stamped drive is advanced to its offer tick first — the sim time corresponding to the
@@ -245,17 +237,16 @@ final class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extend
     * the simulation thread was starved while they queued. The `max` keeps the engine from ever moving backwards: a
     * stale stamp (an offer predating this run's pacing anchor, or a nanosecond race where the loop iterated between the
     * `set` call and the enqueue) falls back to applying at the current tick, exactly the case where the simulation is
-    * not starved anyway. Unstamped entries apply at the current tick, as before.
+    * not starved anyway. Unstamped entries apply at the current tick.
     */
-  private def applyEntry(e: Engine, entry: InboxEntry, startTick: Long, startNanos: Long): Engine = {
+  private def applyEntry(entry: InboxEntry, startTick: Long, startNanos: Long): Unit = {
     entry.offerNanos match {
       case Some(nanos) =>
         val stampTick = startTick + saturatingTicks(nanos - startNanos, ticksPerSecond)
-        if (stampTick > e.tick) e.runTo(stampTick)
+        if (stampTick > engine.tick) engine.runTo(stampTick)
       case None => ()
     }
-    entry.action(e)
-    e
+    entry.action(engine)
   }
 
   private def saturatingTicks(elapsedNanos: Long, ticksPerSecond: Long): Long = {

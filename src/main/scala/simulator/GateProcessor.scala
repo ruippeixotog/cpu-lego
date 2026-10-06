@@ -78,7 +78,7 @@ final case class GateProcessor(
     private val portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
     private val portObservers: Map[Port, List[GateProcessor => GateProcessor]] = Map().withDefaultValue(Nil),
     private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
-) {
+) extends EngineState {
 
   private def schedule(after: Long, ev: GateProcessor.Event): GateProcessor =
     copy(events = events + ((t + after, events.getOrElse(t + after, Vector()) :+ ev)))
