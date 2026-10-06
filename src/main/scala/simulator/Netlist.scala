@@ -20,13 +20,12 @@ import core.*
   *   - Clock: `clockHalfPeriod`, `clockOut`
   *
   * Per-net driver and reader lists are CSR arrays (`driverOffsets`/`driverEntries`, `readerOffsets`/`readerEntries`).
-  * Entries pack a primitive reference; see [[Netlist.packRef]]. Drivers are NAND and Clock outputs plus Switch outputs
-  * (switches are tri-state drivers: `GateProcessor.setup` drives `out` to `in` while enabled and to `None` otherwise);
+  * Entries pack a primitive reference; see [[Netlist.packRef]]. Drivers are NAND, Switch (tri-state) and Clock outputs;
   * readers are NAND inputs and Switch in/enable inputs. The constant nets carry no driver entries.
   *
-  * `names` maps every hierarchical port name (`a.b.c`, `bus[i]`, following [[Index]]'s scheme) to its net id, so any
-  * named port stays reachable even when several merge into one net; `nameOf` derives a display name per net. `pins` are
-  * the top-level component's `namedPorts` with directions and net ids (buses expanded to one pin per element).
+  * `names` maps every hierarchical port name (`a.b.c`, `bus[i]`, following [[Index]]'s scheme) to its net id; `nameOf`
+  * gives one display name per net. `pins` are the top-level component's `namedPorts` with directions and net ids (buses
+  * expanded to one pin per element).
   *
   * All arrays are treated as immutable after construction.
   */
@@ -479,8 +478,6 @@ object Netlist {
       i += 1
     }
 
-    // Every hierarchical name stays reachable, mapped to its net id; display names
-    // keep first-encountered order.
     val orderedNames = b.names.map { case (portId, name) => (name, netOfPort(portId)) }.toVector
     val names = orderedNames.toMap
 
