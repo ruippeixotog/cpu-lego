@@ -25,3 +25,9 @@ scalafixOnCompile := true
 
 Test / fork := true
 Test / parallelExecution := false
+
+// Apps (e.g. the VM80A and SAP-1 mains run via `sbt run`) run in a forked JVM
+// with generational ZGC, whose sub-millisecond pauses matter for the real-time
+// host frontend. Tests keep the default GC.
+Compile / run / fork := true
+Compile / run / javaOptions += "-XX:+UseZGC"
