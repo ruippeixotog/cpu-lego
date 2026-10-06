@@ -8,7 +8,7 @@ The SAP-1 built here is as described in [Digital Computer Electronics](https://d
 
 ## Requirements
 
-- JDK 25 LTS (Temurin recommended; CI uses it). `.sdkmanrc` pins the version for [SDKMAN!](https://sdkman.io/) users.
+- JDK 25 LTS (Temurin recommended).
 - [sbt](https://www.scala-sbt.org/) 1.10.x.
 
 Build and test with `sbt test`. Run the apps with `sbt "runMain computer.i8080.VM80aApp"` (VM80A) or `sbt "runMain computer.sap1.SAP1App"` (SAP-1); apps run in a forked JVM with generational ZGC enabled.
