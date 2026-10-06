@@ -98,9 +98,7 @@ class CombinationalCellsSpec extends BaseSpec {
     Design("test", Map("dut" -> module))
   }
 
-  /** Builds the cell once with free input `Port`s, returning the ports, the output port and the settled simulator.
-    * Every input combination is then driven through the same `GateProcessor` instead of rebuilding the circuit.
-    */
+  /** Builds the cell once with free input `Port`s, returning the ports, the output port and the settled simulator. */
   def buildCell(cell: CellUnderTest): (Map[String, Port], Port, GateProcessor) = {
     val design = designFor(cell.cellType, cell.inputs, cell.output)
     val ((ins, y), sim) = buildAndRun {
