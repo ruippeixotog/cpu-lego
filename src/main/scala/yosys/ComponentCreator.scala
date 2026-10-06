@@ -37,7 +37,7 @@ case class ComponentCreator(design: Design) {
           })
         }
 
-      val outPorts = createFromType(cell.`type`, cell.parameters, inPorts)
+      val outPorts = createFromType(compName, cell, inPorts)
 
       outPorts.foreach {
         case (name, p: Port) =>
@@ -68,49 +68,81 @@ case class ComponentCreator(design: Design) {
   }
 
   private def createFromType(
-      compType: String,
-      parameters: Map[String, String],
+      compName: String,
+      cell: Design.Cell,
       inPorts: Map[String, Port | Bus]
-  ): Spec[Map[String, Port | Bus]] =
+  ): Spec[Map[String, Port | Bus]] = {
     // https://yosyshq.readthedocs.io/projects/yosys/en/0.32/CHAPTER_CellLib.html
-    compType match {
+    // Semantics below transcribed from techlibs/common/simcells.v.
+    def inPort(name: String): Port = inPorts(name).asInstanceOf[Port]
+    def inPortsOf(names: String): Vector[Port] = names.map(c => inPort(c.toString)).toVector
+    cell.`type` match {
       case "$_AND_" =>
-        Map("Y" -> and(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+        Map("Y" -> and(inPort("A"), inPort("B")))
       case "$_ANDNOT_" =>
-        Map("Y" -> andNot(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+        Map("Y" -> andNot(inPort("A"), inPort("B")))
+      case "$_AOI3_" =>
+        Map("Y" -> not(or(and(inPort("A"), inPort("B")), inPort("C"))))
+      case "$_AOI4_" =>
+        Map(
+          "Y" -> not(
+            or(and(inPort("A"), inPort("B")), and(inPort("C"), inPort("D")))
+          )
+        )
+      case "$_BUF_" =>
+        Map("Y" -> inPort("A"))
+      case "$_MUX_" =>
+        Map("Y" -> mux(Vector(inPort("A"), inPort("B")), Vector(inPort("S"))))
+      case "$_MUX4_" =>
+        Map("Y" -> mux(inPortsOf("ABCD"), inPortsOf("ST")))
+      case "$_MUX8_" =>
+        Map("Y" -> mux(inPortsOf("ABCDEFGH"), inPortsOf("STU")))
+      case "$_MUX16_" =>
+        Map("Y" -> mux(inPortsOf("ABCDEFGHIJKLMNOP"), inPortsOf("STUV")))
+      case "$_NAND_" =>
+        Map("Y" -> nand(inPort("A"), inPort("B")))
+      case "$_NMUX_" =>
+        Map("Y" -> not(mux(Vector(inPort("A"), inPort("B")), Vector(inPort("S")))))
+      case "$_NOR_" =>
+        Map("Y" -> nor(inPort("A"), inPort("B")))
+      case "$_NOT_" =>
+        Map("Y" -> not(inPort("A")))
+      case "$_OAI3_" =>
+        Map("Y" -> not(and(or(inPort("A"), inPort("B")), inPort("C"))))
+      case "$_OAI4_" =>
+        Map(
+          "Y" -> not(
+            and(or(inPort("A"), inPort("B")), or(inPort("C"), inPort("D")))
+          )
+        )
+      case "$_OR_" =>
+        Map("Y" -> or(inPort("A"), inPort("B")))
       case "$_ORNOT_" =>
-        Map("Y" -> orNot(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+        Map("Y" -> orNot(inPort("A"), inPort("B")))
       case "$_SR_PP_" =>
-        Map("Q" -> norLatch(inPorts("S").asInstanceOf[Port], inPorts("R").asInstanceOf[Port])._1)
+        Map("Q" -> norLatch(inPort("S"), inPort("R"))._1)
       case "$_DFF_P_" =>
-        Map("Q" -> dLatch(inPorts("D").asInstanceOf[Port], inPorts("C").asInstanceOf[Port])._1)
+        Map("Q" -> dLatch(inPort("D"), inPort("C"))._1)
       case "$_DFFSR_PNN_" =>
         Map(
           "Q" -> dLatch(
-            inPorts("D").asInstanceOf[Port],
-            inPorts("C").asInstanceOf[Port],
-            inPorts("R").asInstanceOf[Port],
-            inPorts("S").asInstanceOf[Port]
+            inPort("D"),
+            inPort("C"),
+            inPort("R"),
+            inPort("S")
           )._1
         )
-      case "$_MUX_" =>
-        Map(
-          "Y" -> mux(
-            Vector(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]),
-            Vector(inPorts("S").asInstanceOf[Port])
-          )
-        )
-      case "$_NOT_" =>
-        Map("Y" -> not(inPorts("A").asInstanceOf[Port]))
-      case "$_OR_" =>
-        Map("Y" -> or(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+      case "$_XNOR_" =>
+        Map("Y" -> xnor(inPort("A"), inPort("B")))
       case "$_XOR_" =>
-        Map("Y" -> xor(inPorts("A").asInstanceOf[Port], inPorts("B").asInstanceOf[Port]))
+        Map("Y" -> xor(inPort("A"), inPort("B")))
       case m if !m.startsWith("$") =>
         create(m, inPorts)
       case _ =>
-        throw new IllegalArgumentException(s"Unsupported component type: $compType")
+        val src = cell.attributes.get("src").map(s => s", src $s").getOrElse("")
+        throw new IllegalArgumentException(s"Unsupported component type: ${cell.`type`} (cell $compName$src)")
     }
+  }
 }
 
 object ComponentCreator {
