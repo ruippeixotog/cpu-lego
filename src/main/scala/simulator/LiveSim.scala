@@ -5,8 +5,8 @@ import java.util.concurrent.{CopyOnWriteArrayList, Executors, LinkedBlockingQueu
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future}
 
 import core.*
 
