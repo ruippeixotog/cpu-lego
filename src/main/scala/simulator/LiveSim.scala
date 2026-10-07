@@ -47,7 +47,8 @@ import core.*
   * @param newEngine
   *   builds the simulation engine; invoked once, at construction
   * @param ticksPerSecond
-  *   simulation ticks per wall-clock second while running
+  *   simulation ticks per wall-clock second while running; real-time pacing is `ticksPerSecond = 1_000_000_000` (1 tick =
+  *   1 ns)
   */
 class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim {
   require(ticksPerSecond > 0, "ticksPerSecond must be positive")

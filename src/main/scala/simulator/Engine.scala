@@ -39,7 +39,7 @@ trait Engine {
   /** Process the next scheduled event batch. If no events are scheduled, do nothing. */
   def step(): Unit
 
-  /** The current simulation tick. */
+  /** The current simulation tick (1 tick = 1 nanosecond). */
   def tick: Long
 
   /** An immutable view of the engine's current state, unaffected by later changes to the engine. */
