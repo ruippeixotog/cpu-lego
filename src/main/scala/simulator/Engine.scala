@@ -4,8 +4,7 @@ import core.*
 
 /** A read-only, immutable view of an [[Engine]]'s state.
   *
-  * A snapshot is detached from the engine: reading it never observes a half-advanced simulation, and it is safe to
-  * share with reader threads.
+  * A snapshot is immutable and detached from the engine, so it can be shared freely across threads.
   */
 trait EngineState {
 
@@ -18,8 +17,7 @@ trait EngineState {
 
 /** A deterministic, single-threaded discrete-event simulation engine.
   *
-  * Not thread-safe: an engine is driven from one thread at a time. [[LiveSim]] paces it with `tick` and `runTo`; `step`
-  * is for tests and diagnostics. [[Sim]] exposes none of them.
+  * Not thread-safe: an engine must be driven from one thread at a time.
   */
 trait Engine {
 
@@ -44,11 +42,12 @@ trait Engine {
   /** The current simulation tick. */
   def tick: Long
 
-  /** An immutable view of the engine's current state, safe to publish to reader threads. */
+  /** An immutable view of the engine's current state, unaffected by later changes to the engine. */
   def snapshot: EngineState
 
-  /** Run `callback` with the port's new effective value on every change, in simulation order. The callback runs on the
-    * simulation thread while the engine is mid-step; it must not drive the engine or block — use it only to observe.
+  /** Run `callback` with the port's new effective value on every change, in simulation order. The callback runs
+    * synchronously, on the thread driving the engine, while the engine is mid-step; it must not drive the engine or
+    * block — use it only to observe.
     */
   def watch(port: Port)(callback: Option[Boolean] => Unit): Unit
 }
