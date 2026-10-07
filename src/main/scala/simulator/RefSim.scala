@@ -13,7 +13,8 @@ import core.*
   * @param conf
   *   gate and wire delays
   * @param ticksPerSecond
-  *   simulation ticks per wall-clock second while running
+  *   simulation ticks per wall-clock second while running; real-time pacing is `ticksPerSecond = 1_000_000_000` (1 tick =
+  *   1 ns)
   */
 final class RefSim(
     circuit: Circuit,
@@ -30,7 +31,8 @@ object RefSim {
     * @param conf
     *   gate and wire delays
     * @param ticksPerSecond
-    *   simulation ticks per wall-clock second while running
+    *   simulation ticks per wall-clock second while running; real-time pacing is `ticksPerSecond = 1_000_000_000` (1
+    *   tick = 1 ns)
     */
   def apply(
       circuit: Circuit,

@@ -24,7 +24,7 @@ final case class PortUpdate(port: Port, value: Option[Boolean])
   *
   * The contract is deliberately small, modeling what a real peripheral can do: drive wires, read wires, and react to
   * wire changes. There is no tick and no stepping — a peripheral cannot ask a real CPU for its current cycle, and
-  * neither can it ask a Sim.
+  * neither can it ask a Sim. (Underneath, simulation time is measured in ticks, with 1 tick = 1 nanosecond.)
   *
   * All methods are safe to call from any thread. Implementations must document their execution model: when the
   * simulation advances, whether it can stop on its own, and what `start`/`stop` mean.
