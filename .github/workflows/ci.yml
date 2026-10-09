@@ -5,6 +5,12 @@ on:
     branches: [master]
   pull_request:
 
+# A new push to a pull request cancels its runs for older commits. Other
+# events are grouped by run, so each one runs to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04-arm-self-hosted
