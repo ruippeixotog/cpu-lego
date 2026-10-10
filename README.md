@@ -29,14 +29,27 @@ The project is organized into the following packages:
 
 - `core`: a package containing the core definitions needed for digital circuits, including definitions for the three components described above.
 - `component`: the CPUs definitions and library of components used to build them, organized into different areas (e.g. logic, memory, arithmetic)
-- `computer`: the classes needed to program and run computers. 
+- `computer`: the classes needed to program and run computers.
 - `simulator`: the implementation of the digital circuit simulator.
+- `iss`: a cycle-exact NMOS 6502 instruction-set simulator in pure Scala — the golden model for the hand-written DSL 6502. It has no simulator dependency: it talks to memory through a per-cycle `Bus6502` trait (`read`/`write` per bus cycle), and `step()` runs a single bus cycle.
+- `util`: small shared helpers, including `ExternalAssets` (see below).
 
 It makes heavy use of two features introduced by Scala 3:
 
 - [Context functions](https://docs.scala-lang.org/scala3/reference/contextual/context-functions.html): `Spec[A]` is an alias for a context function `BuilderEnv ?=> A` (a function that receives a given instance of a `BuilderEnv` and returns an `A`). This allowed me to hide away the mutable machinery needed to represent a component graph and expose only component blueprints fully focused on composition with zero boilerplate.
 
 - [Metaprogramming](https://docs.scala-lang.org/scala3/reference/metaprogramming/index.html): `newSpec` is a macro used throughout component definitions as a way to define the boundaries of a logical component. It doesn't change the behavior of the code it wraps, but it collects information about the function's context (such as its name and name of their arguments) to allow for a better representation of the circuit at runtime (e.g. referencing ports by their name). `newPort` is another example of a macro-powered constructor.
+
+## External test assets
+
+Some tests need data files that are too large to vendor in the repo — e.g. the [SingleStepTests](https://github.com/SingleStepTests/65x02) 6502 suites used to validate the `iss` package cycle-by-cycle. `util.ExternalAssets` is the single place that knows where those files live:
+
+- if `$CPU_LEGO_ASSETS/<name>` already exists it is used as-is, so a file you drop in by hand always wins;
+- otherwise the file is fetched once from its URL and cached there.
+
+The default cache directory is `~/.cache/cpu-lego`; set `$CPU_LEGO_ASSETS` to override it. When an asset cannot be obtained (no network, fetch failed), the tests that need it skip with a clear message instead of failing. In restricted environments, pre-populate the cache directory by hand (e.g. with curl) and the tests will pick the files up without any download.
+
+The SingleStepTests suites run sampled by default (every 32nd test per opcode); set `CPU_LEGO_SINGLESTEP_FULL=1` to run the full set.
 
 ## License
 
