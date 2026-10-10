@@ -5,6 +5,7 @@ import java.util.concurrent.{CopyOnWriteArrayList, Executors, LinkedBlockingQueu
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
 
 import core.*
@@ -40,6 +41,14 @@ import core.*
   *     order.
   *   - [[start]] runs the simulation paced at `ticksPerSecond` simulation ticks per second of wall-clock time; [[stop]]
   *     halts it. The loop never stops on its own: it runs until `stop` is called.
+  *   - Bounded catch-up: if the simulation falls more than `maxCatchUp` of wall time behind — a stall (GC, debugger,
+  *     laptop sleep) or an engine slower than real time — the pacing anchor is rebased onto the current tick and time,
+  *     dropping the debt. The simulation resumes at the configured rate instead of fast-forwarding. Drive time-stamps
+  *     stay consistent across a rebase: an offer time predating the new anchor is stale and applies at the current
+  *     tick, as stale stamps do today.
+  *
+  * Host-side pacing diagnostics ([[achievedTicksPerSecond]], [[lagMs]], [[rebaseCount]]) live on this class, not on
+  * [[Sim]]: peripherals must not observe simulator speed.
   *
   * Peripherals interact only through the [[Sim]] interface: they see ports, never ticks — if the simulation lags behind
   * the wall clock, peripherals lag in kind, exactly like real hardware.
@@ -48,9 +57,21 @@ import core.*
   *   builds the simulation engine; invoked once, at construction
   * @param ticksPerSecond
   *   simulation ticks per wall-clock second while running
+  * @param maxCatchUp
+  *   how far behind the wall clock the simulation may fall before the pacing anchor is rebased, dropping the
+  *   accumulated debt; must be positive
   */
-class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim {
+class LiveSim(
+    newEngine: () => Engine,
+    ticksPerSecond: Long = 1000,
+    val maxCatchUp: FiniteDuration = FiniteDuration(100, TimeUnit.MILLISECONDS),
+    // Test seam: the clock the paced loop and drive offer-stamps are measured against. Production uses the wall clock.
+    private[simulator] val nanoTime: () => Long = System.nanoTime
+) extends Sim {
   require(ticksPerSecond > 0, "ticksPerSecond must be positive")
+  require(maxCatchUp > Duration.Zero, "maxCatchUp must be positive")
+
+  private val maxCatchUpMs = maxCatchUp.toUnit(TimeUnit.MILLISECONDS)
 
   private type Action = Engine => Unit
 
@@ -67,6 +88,12 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
   private val inbox = new LinkedBlockingQueue[InboxEntry]()
   private val running = new AtomicBoolean(false)
   private val generation = new AtomicLong(0)
+
+  // Pacing diagnostics, written by the simulation thread once per quantum, read from any thread. Deliberately not on
+  // Sim: peripherals must not observe simulator speed.
+  @volatile private var achievedTicksPerSecondValue = 0.0
+  @volatile private var lagMsValue = 0.0
+  private val rebaseCountValue = new AtomicLong(0)
 
   // How long the paced loop sleeps between quanta when it is ahead of the
   // wall clock. Short enough to pick up drives promptly.
@@ -115,13 +142,13 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
     * sim tick when the inbox is next drained.
     */
   def set(port: Port, value: Option[Boolean]): Unit =
-    inbox.offer(InboxEntry(_.set(port, value), Some(System.nanoTime())))
+    inbox.offer(InboxEntry(_.set(port, value), Some(nanoTime())))
 
   /** Drive every port of the bus. All drives share one offer time and are applied together by the simulation thread at
     * the corresponding sim tick when the inbox is next drained.
     */
   def set(bus: Bus, values: Seq[Boolean]): Unit =
-    inbox.offer(InboxEntry(_.set(bus, values), Some(System.nanoTime())))
+    inbox.offer(InboxEntry(_.set(bus, values), Some(nanoTime())))
 
   // --- reads ---
 
@@ -201,21 +228,74 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
   private def unsubscribe(port: Port, sub: Subscriber): Unit =
     subscribers.get(port).foreach(_.remove(sub))
 
+  // --- pacing diagnostics ---
+
+  /** Achieved simulation ticks per wall-clock second, as an exponentially weighted moving average over ~1 second. For
+    * host apps (HUD, benchmarks): deliberately not on [[Sim]] — a peripheral must not observe simulator speed.
+    */
+  def achievedTicksPerSecond: Double = achievedTicksPerSecondValue
+
+  /** How far the simulation currently lags behind the wall clock, in milliseconds: wall time elapsed since the pacing
+    * anchor minus sim time elapsed since the anchor. Bounded by [[maxCatchUp]]: when the lag would exceed it, the
+    * pacing anchor is rebased instead. For host apps only — see [[achievedTicksPerSecond]].
+    */
+  def lagMs: Double = lagMsValue
+
+  /** How many times the pacing anchor was rebased since construction (see [[maxCatchUp]]). For host apps only — see
+    * [[achievedTicksPerSecond]].
+    */
+  def rebaseCount: Long = rebaseCountValue.get()
+
   // --- paced loop ---
 
   private def realtimeLoop(gen: Long): Unit = {
-    val startTick = engine.tick
-    val startNanos = System.nanoTime()
+    var anchorTick = engine.tick
+    var anchorNanos = nanoTime()
+    var prevNanos = anchorNanos
+    var prevTick = anchorTick
+    var haveRateSample = false
     while (running.get() && generation.get() == gen) {
-      val deadline = startTick + saturatingTicks(System.nanoTime() - startNanos, ticksPerSecond)
-      drain(startTick, startNanos)
+      val now = nanoTime()
+      // How far the simulation lags behind the wall clock: wall time elapsed since the pacing anchor minus sim time
+      // elapsed since the anchor. Normally ~zero; a stall (GC, debugger, laptop sleep) or an engine slower than real
+      // time lets it grow. (Double: the tick-to-nanos product can exceed Long range over very long runs, and the
+      // comparison against maxCatchUp needs none of that precision.)
+      val debtMs = (now - anchorNanos) / 1000000.0 - (engine.tick - anchorTick) * 1000.0 / ticksPerSecond
+      if (debtMs > maxCatchUpMs) {
+        // The simulation fell more than maxCatchUp behind the wall clock. Rebase the pacing anchor onto the current
+        // tick and time, dropping the debt: the simulation resumes at the configured rate from now instead of
+        // fast-forwarding to catch up.
+        anchorTick = engine.tick
+        anchorNanos = now
+        rebaseCountValue.incrementAndGet()
+        lagMsValue = 0.0
+      } else {
+        // The engine cannot run past the pacing deadline, so the debt is never negative here; the max guards float
+        // noise. Bounded by maxCatchUp: the rebase above fired if it would exceed it.
+        lagMsValue = math.max(0.0, debtMs)
+      }
+      val deadline = anchorTick + saturatingTicks(now - anchorNanos, ticksPerSecond)
+      drain(anchorTick, anchorNanos)
       engine.runTo(deadline)
+      // Pacing diagnostics, simulation thread only.
+      val dtNanos = now - prevNanos
+      val dTicks = engine.tick - prevTick
+      if (dtNanos > 0) {
+        val instant = dTicks.toDouble / dtNanos * 1000000000.0
+        val alpha = math.min(1.0, dtNanos / 1000000000.0) // ~1 s EWMA window
+        achievedTicksPerSecondValue =
+          if (haveRateSample) achievedTicksPerSecondValue + alpha * (instant - achievedTicksPerSecondValue)
+          else instant
+        haveRateSample = true
+      }
+      prevNanos = now
+      prevTick = engine.tick
       published.set(engine.snapshot)
       dispatchNotifications()
       try {
         val entry = inbox.poll(QuantumMillis, TimeUnit.MILLISECONDS)
         if (entry != null) {
-          applyEntry(entry, startTick, startNanos)
+          applyEntry(entry, anchorTick, anchorNanos)
           published.set(engine.snapshot)
         }
       } catch {
@@ -224,10 +304,10 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
     }
   }
 
-  private def drain(startTick: Long, startNanos: Long): Unit = {
+  private def drain(anchorTick: Long, anchorNanos: Long): Unit = {
     var entry = inbox.poll()
     while (entry != null) {
-      applyEntry(entry, startTick, startNanos)
+      applyEntry(entry, anchorTick, anchorNanos)
       entry = inbox.poll()
     }
   }
@@ -235,14 +315,15 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
   /** Apply one inbox entry. A stamped drive is advanced to its offer tick first — the sim time corresponding to the
     * wall-clock instant it was offered — so drives land in sim time when they were driven in wall-clock time, even if
     * the simulation thread was starved while they queued. The `max` keeps the engine from ever moving backwards: a
-    * stale stamp (an offer predating this run's pacing anchor, or a nanosecond race where the loop iterated between the
-    * `set` call and the enqueue) falls back to applying at the current tick, exactly the case where the simulation is
-    * not starved anyway. Unstamped entries apply at the current tick.
+    * stale stamp (an offer predating the pacing anchor — including one predating a rebase of the anchor — or a
+    * nanosecond race where the loop iterated between the `set` call and the enqueue) falls back to applying at the
+    * current tick, exactly the case where the simulation is not starved anyway. Unstamped entries apply at the current
+    * tick.
     */
-  private def applyEntry(entry: InboxEntry, startTick: Long, startNanos: Long): Unit = {
+  private def applyEntry(entry: InboxEntry, anchorTick: Long, anchorNanos: Long): Unit = {
     entry.offerNanos match {
       case Some(nanos) =>
-        val stampTick = startTick + saturatingTicks(nanos - startNanos, ticksPerSecond)
+        val stampTick = anchorTick + saturatingTicks(nanos - anchorNanos, ticksPerSecond)
         if (stampTick > engine.tick) engine.runTo(stampTick)
       case None => ()
     }
