@@ -82,7 +82,7 @@ object GraphvizDrawer {
             portMap.add(out, Direction.Output, s"$cName:p3")
             addRecordNode(cName, "<p1> in1|<p2> in2", s"$name\\nNAND", "<p3> out")
 
-          case Clock(_, out) =>
+          case Clock(_, out, _) =>
             portMap.add(out, Direction.Input, s"$cName:p1")
             addRecordNode(cName, "", s"$name\nClock", "<p1> out")
 

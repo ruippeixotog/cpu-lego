@@ -33,8 +33,8 @@ object GateProcessor {
           case _ => None
         }
 
-      case (p, Clock(freq, out)) =>
-        p.set(out, true).watch(out)(_.toggleAfter(freq, out))
+      case (p, Clock(halfPeriod, out, initialLevel)) =>
+        p.set(out, initialLevel).watch(out)(_.toggleAfter(halfPeriod, out))
 
       case (p, Switch(in, out, enable)) =>
         binaryOp(p, enable, in, out, 0) {
@@ -66,6 +66,8 @@ object GateProcessor {
   * A GateProcessor is an immutable, deterministic discrete-event simulation of a [[Circuit]]: every method returns a
   * new processor, time only moves forward through [[step]], [[runTo]] and [[run]], and nothing is shared between
   * threads. It is the reusable engine underneath live simulators (see [[Sim]]) and the workhorse of the test suite.
+  *
+  * Simulation time is measured in ticks, with 1 tick = 1 nanosecond; delays and timestamps throughout are in ticks.
   *
   * It is deliberately not a [[Sim]]: a Sim is a live, running simulation that peripherals interact with concurrently,
   * while a GateProcessor is a pure value that tests and simulators drive explicitly.
