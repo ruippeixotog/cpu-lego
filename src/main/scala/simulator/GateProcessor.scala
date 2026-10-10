@@ -4,7 +4,6 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeMap
 
 import core.*
-import util.UnionFind
 
 import GateProcessor.Event.*
 
