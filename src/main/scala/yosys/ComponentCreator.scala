@@ -235,7 +235,7 @@ object ComponentCreator {
       case _ => Map.empty
     }
 
-  def fromVerilog(vFile: Path): Component = {
+  def fromVerilog(vFile: Path): ComponentCreator = {
     val tmpDir = Files.createTempDirectory("cpu-lego")
     val jsonFile = tmpDir.resolve("out.json")
 

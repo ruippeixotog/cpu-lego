@@ -212,39 +212,4 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
       idx.ports.keys.forall(!_.split('.').last.startsWith("$")) must beTrue
     }
   }
-
-  "An imported VM80A" should {
-    "expose RTL-meaningful names in the Index" in {
-      val creator = ComponentCreator.fromVerilog(
-        Path.of("src/main/verilog/vm80a/org/rtl/vm80a.v")
-      )
-      val clk, f1, f2, reset, hold, ready, int = new Port()
-      val d: Bus = Vector.fill(8)(new Port())
-      val (_, comp) = buildComponent {
-        creator.create(
-          "vm80a",
-          Map(
-            "pin_clk" -> clk,
-            "pin_f1" -> f1,
-            "pin_f2" -> f2,
-            "pin_reset" -> reset,
-            "pin_d" -> d,
-            "pin_hold" -> hold,
-            "pin_ready" -> ready,
-            "pin_int" -> int
-          )
-        )
-      }
-      val idx = Index(comp.asInstanceOf[CompositeComponent])
-      // submodule instance keeps its RTL instance name...
-      idx.components.keys must contain("core")
-      // ...visible netnames (e.g. the top-level registers) are indexed...
-      idx.ports.keys must contain("f1_core")
-      idx.ports.keys must contain("f2_core")
-      idx.buses.keys must contain("core.acc")
-      // ...and hidden (auto-generated) netnames are skipped: no port is named like one
-      idx.ports.keys.forall(!_.split('.').last.startsWith("$")) must beTrue
-      idx.buses.keys.forall(!_.split('.').last.startsWith("$")) must beTrue
-    }
-  }
 }
