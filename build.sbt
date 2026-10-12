@@ -31,3 +31,7 @@ Test / parallelExecution := false
 // host frontend. Tests keep the default GC.
 Compile / run / fork := true
 Compile / run / javaOptions += "-XX:+UseZGC"
+
+// Benchmark suite (issue #47): `sbt bench` runs every registered workload in
+// bench.Workloads against the gate-level engine and prints the report.
+addCommandAlias("bench", "runMain bench.Bench")
