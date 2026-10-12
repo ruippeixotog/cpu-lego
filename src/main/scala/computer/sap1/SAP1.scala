@@ -25,8 +25,12 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   val index = Index(comp)
 
-  private val conf = Config.default
-  private val circuit = Circuit(comp)
+  val conf: Config = Config.default
+
+  /** The gate-level circuit, exposed for engine-native drivers (e.g. benchmarks) that drive the [[Engine]] directly
+    * instead of the wall-clock paced [[Sim]].
+    */
+  val circuit: Circuit = Circuit(comp)
 
   // The demo paces the reference simulator well above real time, so that a
   // derived wall-clock phase bound comfortably covers gate propagation.
@@ -41,6 +45,12 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
     val ticks = (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
     (ticks * 1000 + ticksPerSecond - 1) / ticksPerSecond
   }
+
+  /** The same conservative bound as [[phaseBoundMs]], in simulation ticks: the unit an [[simulator.Engine]] works in.
+    * Exposed for engine-native drivers (e.g. benchmarks) that cannot use the wall-clock paced [[Sim]] protocol.
+    */
+  val phaseBoundTicks: Long =
+    (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
 
   private val clkOut = index.ports("sap1.clock.out")
   private val ringOut = index.buses("sap1.sequencer.ringCounter.out")
