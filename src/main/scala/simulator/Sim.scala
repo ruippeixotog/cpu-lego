@@ -2,6 +2,8 @@ package simulator
 
 import java.util.concurrent.LinkedBlockingQueue
 
+import scala.concurrent.Future
+
 import core.*
 
 /** A change in a port's effective value, as observed on a live [[Sim]].
@@ -77,6 +79,21 @@ trait Sim {
     * the returned subscription from any thread.
     */
   def subscribe(port: Port): PollSubscription
+
+  /** Subscribe to structured faults reported by the simulation engine (for example bus contention). Callbacks run
+    * sequentially on the notifier thread, in recording order. A callback must return quickly and must not throw
+    * (exceptions are reported and ignored).
+    *
+    * @return
+    *   an AutoCloseable that unregisters the callback
+    */
+  def faults(callback: Fault => Unit): AutoCloseable
+
+  /** A future completing with the first halting fault. With the default [[FaultPolicy.Halt]] policy the simulation
+    * stops on the first fault and this completes with it; with [[FaultPolicy.Continue]] faults never halt the
+    * simulation, so this never completes.
+    */
+  def failure: Future[Fault]
 }
 
 /** A pollable subscription to a port's value changes, as returned by [[Sim.subscribe]].

@@ -4,9 +4,12 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentLinkedQueue, LinkedBlockingQueue}
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 import component.BuilderAPI.*
+import component.*
 import core.*
 import testkit.*
 
@@ -47,6 +50,10 @@ class RefSimSpec extends BaseSpec {
       }
       new PollSubscription(port, queue, () => closable.close())
     }
+
+    def faults(callback: Fault => Unit): AutoCloseable = () => ()
+
+    def failure: Future[Fault] = Future.never
   }
 
   private def nandCircuit(): (Port, Port, Port, Circuit) = {
@@ -346,6 +353,78 @@ class RefSimSpec extends BaseSpec {
 
       sim.stop()
       sim.isRunning must beFalse
+    }
+
+    /** Two switches driving one net with opposite values: with the default Halt policy the sim reports a Contention
+      * fault with readable hierarchical names, stops, and completes `failure` with it.
+      */
+    "halt on bus contention and complete failure with the Contention fault" in {
+      val in1, in2, bus = newPort()
+      val (_, comp) = buildComponent {
+        switch(in1, High) ~> bus
+        switch(in2, High) ~> bus
+        summon[BuilderEnv].register("bus", bus)
+      }
+      val portNames = Index(comp).ports.map { case (name, port) => port -> name }.toMap
+      val sim = RefSim(Circuit(comp), portNames = portNames)
+
+      val received = new ConcurrentLinkedQueue[Fault]()
+      val closable = sim.faults { f =>
+        received.add(f); ()
+      }
+
+      sim.start()
+      try {
+        sim.set(in1, true)
+        Thread.sleep(100) // let the first drive settle: a single driver is no fault
+        sim.set(in2, false)
+
+        // the loop halts on the first fault
+        waitFor() { if (!sim.isRunning) Some(()) else None }
+
+        val fault = waitFor() { Option(received.poll()) }
+        fault must beAnInstanceOf[Fault.Contention]
+        val contention = fault.asInstanceOf[Fault.Contention]
+        contention.nets must contain("bus")
+        contention.values.toSet must beEqualTo(Set(true, false))
+
+        Await.result(sim.failure, 5.seconds) must beEqualTo(fault)
+      } finally {
+        sim.stop()
+        closable.close()
+      }
+    }
+
+    /** With Continue the sim keeps running through the contention and faults are delivered via the subscription. */
+    "keep running on bus contention with Continue, delivering faults to subscribers" in {
+      val in1, in2, bus = newPort()
+      val (_, comp) = buildComponent {
+        switch(in1, High) ~> bus
+        switch(in2, High) ~> bus
+      }
+      val sim = RefSim(Circuit(comp), onFault = FaultPolicy.Continue)
+
+      val received = new ConcurrentLinkedQueue[Fault]()
+      val closable = sim.faults { f =>
+        received.add(f); ()
+      }
+
+      sim.start()
+      try {
+        sim.set(in1, true)
+        Thread.sleep(100) // let the first drive settle: a single driver is no fault
+        sim.set(in2, false)
+
+        val fault = waitFor() { Option(received.poll()) }
+        fault must beAnInstanceOf[Fault.Contention]
+
+        // the sim keeps running despite the fault
+        Thread.sleep(200)
+        sim.isRunning must beTrue
+      } finally {
+        sim.stop()
+        closable.close()
+      }
     }
   }
 }

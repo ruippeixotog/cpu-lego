@@ -89,17 +89,39 @@ class SimulatorSpec extends BaseSpec {
       )
     }
 
-    "throw on persistent bus contention" in {
+    "record a Contention fault on persistent bus contention" in {
+      val in1, in2, bus = newPort()
+      val (_, comp) = buildComponent {
+        switch(in1, High) ~> bus
+        switch(in2, High) ~> bus
+        summon[BuilderEnv].register("bus", bus)
+      }
+      val sim = GateProcessor
+        .setup(comp)
+        .set(in1, Some(true))
+        .run(Some(200)) // let the first drive settle: a single driver is no fault
+        .set(in2, Some(false))
+        .run() // the second drive disagrees persistently: one Contention fault
+      sim.faults must haveSize(1)
+      sim.faults.head must beAnInstanceOf[Fault.Contention]
+      val contention = sim.faults.head.asInstanceOf[Fault.Contention]
+      contention.nets must contain("bus")
+      contention.values.toSet must beEqualTo(Set(true, false))
+    }
+
+    "not record a fault for agreeing multiple drivers" in {
       val in1, in2, bus = newPort()
       val (_, comp) = buildComponent {
         switch(in1, High) ~> bus
         switch(in2, High) ~> bus
       }
-      GateProcessor
+      val sim = GateProcessor
         .setup(comp)
         .set(in1, Some(true))
-        .set(in2, Some(false))
-        .run() must throwA[Exception]("PUM")
+        .set(in2, Some(true))
+        .run()
+      sim.faults must beEmpty
+      sim.get(bus) must beSome(true)
     }
   }
 }

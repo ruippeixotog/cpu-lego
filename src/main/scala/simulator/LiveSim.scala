@@ -5,7 +5,7 @@ import java.util.concurrent.{CopyOnWriteArrayList, Executors, LinkedBlockingQueu
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 
 import core.*
 
@@ -39,7 +39,8 @@ import core.*
   *   - [[subscribe]]/[[watch]] observe effective-value changes; each change is delivered exactly once, in simulation
   *     order.
   *   - [[start]] runs the simulation paced at `ticksPerSecond` simulation ticks per second of wall-clock time; [[stop]]
-  *     halts it. The loop never stops on its own: it runs until `stop` is called.
+  *     halts it. With the default [[FaultPolicy.Halt]] the loop also stops on the first engine fault, completing
+  *     [[failure]]; with [[FaultPolicy.Continue]] it runs until `stop` is called.
   *
   * Peripherals interact only through the [[Sim]] interface: they see ports, never ticks — if the simulation lags behind
   * the wall clock, peripherals lag in kind, exactly like real hardware.
@@ -48,8 +49,12 @@ import core.*
   *   builds the simulation engine; invoked once, at construction
   * @param ticksPerSecond
   *   simulation ticks per wall-clock second while running
+  * @param onFault
+  *   what to do when the engine reports a fault: [[FaultPolicy.Halt]] (the default) stops the simulation loop on the
+  *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[Sim.faults]] subscribers
   */
-class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim {
+class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000, onFault: FaultPolicy = FaultPolicy.Halt)
+    extends Sim {
   require(ticksPerSecond > 0, "ticksPerSecond must be positive")
 
   private type Action = Engine => Unit
@@ -75,6 +80,13 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
   private val observedPorts = TrieMap.empty[Port, Unit]
   private val lastNotified = TrieMap.empty[Port, Option[Boolean]]
   private val subscribers = TrieMap.empty[Port, CopyOnWriteArrayList[Subscriber]]
+  private val faultSubscribers = new CopyOnWriteArrayList[Fault => Unit]()
+  private val failurePromise = Promise[Fault]()
+
+  /** How many of the engine's recorded faults have been forwarded to subscribers. The engine only ever appends, so a
+    * count is enough to pick out the fresh ones. Touched only by the simulation thread.
+    */
+  private var engineFaultsSeen = 0
 
   private def daemonThreads(name: String): ThreadFactory =
     (r: Runnable) => {
@@ -157,6 +169,21 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
     new PollSubscription(port, queue, () => unsubscribe(port, sub))
   }
 
+  /** Subscribe to structured faults reported by the simulation engine. Callbacks run sequentially on the notifier
+    * thread, in recording order; a callback must return quickly and must not throw (exceptions are reported and
+    * ignored).
+    */
+  def faults(callback: Fault => Unit): AutoCloseable = {
+    faultSubscribers.add(callback)
+    () => faultSubscribers.remove(callback)
+  }
+
+  /** A future completing with the first halting fault. With [[FaultPolicy.Halt]] (the default) the simulation stops on
+    * the first fault and this completes with it; with [[FaultPolicy.Continue]] faults never halt the simulation, so
+    * this never completes.
+    */
+  def failure: Future[Fault] = failurePromise.future
+
   private def ensureObserved(port: Port): Unit =
     if (observedPorts.putIfAbsent(port, ()).isEmpty)
       inbox.offer(
@@ -210,12 +237,14 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
       val deadline = startTick + saturatingTicks(System.nanoTime() - startNanos, ticksPerSecond)
       drain(startTick, startNanos)
       engine.runTo(deadline)
+      pollEngineFaults()
       published.set(engine.snapshot)
       dispatchNotifications()
       try {
         val entry = inbox.poll(QuantumMillis, TimeUnit.MILLISECONDS)
         if (entry != null) {
           applyEntry(entry, startTick, startNanos)
+          pollEngineFaults()
           published.set(engine.snapshot)
         }
       } catch {
@@ -223,6 +252,34 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000) extends Sim 
       }
     }
   }
+
+  /** Forward newly recorded engine faults to [[faults]] subscribers, in recording order. With [[FaultPolicy.Halt]] (the
+    * default) the first fault also stops the simulation loop and completes [[failure]]. Runs on the simulation thread,
+    * after the engine has advanced.
+    */
+  private def pollEngineFaults(): Unit = {
+    val fresh = engine.faults.drop(engineFaultsSeen)
+    if (fresh.nonEmpty) {
+      engineFaultsSeen += fresh.size
+      fresh.foreach(dispatchFault)
+      if (onFault == FaultPolicy.Halt) {
+        failurePromise.trySuccess(fresh.head)
+        running.set(false)
+      }
+    }
+  }
+
+  /** Deliver one fault to every subscriber, on the notifier thread. A throwing callback is reported and ignored, like
+    * watch callbacks. Runs on the simulation thread; only touches concurrent structures.
+    */
+  private def dispatchFault(f: Fault): Unit =
+    faultSubscribers.forEach { cb =>
+      Future {
+        try cb(f)
+        catch { case e: Exception => e.printStackTrace() }
+      }(notifierEc)
+      ()
+    }
 
   private def drain(startTick: Long, startNanos: Long): Unit = {
     var entry = inbox.poll()
