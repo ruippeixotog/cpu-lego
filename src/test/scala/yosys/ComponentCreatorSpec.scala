@@ -6,7 +6,7 @@ import component.BuilderAPI.*
 import core.*
 import org.scalacheck.Prop
 import org.scalacheck.Prop.forAll
-import simulator.{GateProcessor, Index}
+import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
@@ -185,7 +185,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
       val (_, comp) = buildComponent {
         tristateY(tristateCreatorFromHdl, new Port(), new Port(), new Port(), new Port(), bus)
       }
-      val idx = Index(comp.asInstanceOf[CompositeComponent])
+      val idx = simulator.Index(comp.asInstanceOf[CompositeComponent])
       // visible netnames are registered as named ports/buses
       idx.ports.keys must contain("sel_a")
       idx.ports.keys must contain("bus")
@@ -202,7 +202,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
         )
         outs("y").asInstanceOf[Port]
       }
-      val idx = Index(comp.asInstanceOf[CompositeComponent])
+      val idx = simulator.Index(comp.asInstanceOf[CompositeComponent])
       // submodule instance keeps its RTL instance name
       idx.components.keys must contain("u1")
       // visible netnames inside the submodule are indexed under it...
