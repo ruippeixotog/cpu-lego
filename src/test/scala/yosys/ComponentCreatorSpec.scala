@@ -6,8 +6,7 @@ import component.BuilderAPI.*
 import core.*
 import org.scalacheck.Prop
 import org.scalacheck.Prop.forAll
-import simulator.GateProcessor
-import simulator.Index
+import simulator.{GateProcessor, Index}
 import testkit.*
 import util.Implicits.*
 
