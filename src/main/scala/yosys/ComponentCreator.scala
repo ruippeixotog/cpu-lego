@@ -7,7 +7,6 @@ import scala.sys.process.*
 
 import component.*
 import component.BuilderAPI.*
-import component.BuilderAPIMacros.NamedPort
 import core.*
 import yosys.Design.Direction as DesignDirection
 
@@ -42,7 +41,8 @@ case class ComponentCreator(design: Design) {
       portReg.getOrElseUpdate(
         bit,
         bit match {
-          case b: Int => netNamesByBit.get(b).fold(new Port())(n => NamedPort(Some(moduleName), n))
+          case b: Int =>
+            netNamesByBit.get(b).fold(new Port())(n => BuilderAPIMacros.NamedPort(Some(moduleName), n))
           case _ => new Port()
         }
       )
