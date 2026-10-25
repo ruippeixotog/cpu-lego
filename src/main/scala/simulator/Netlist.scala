@@ -12,7 +12,7 @@ import core.*
   * Built from a [[core.Component]] hierarchy in a single iterative pass (deep hierarchies cannot blow the stack). Every
   * [[core.Port]] is interned to a dense integer id by identity; ports joined by wires are merged into nets with a
   * union-find (path compression and union by rank) and compacted to dense net ids. Net 0 is reserved for the
-  * [[core.High]] constant, net 1 for [[core.Low]].
+  * [[core.Low]] constant, net 1 for [[core.High]].
   *
   * Primitives are stored in struct-of-arrays form, holding net ids (except `clockHalfPeriod`, which holds ticks):
   *   - NAND: `nandIn1`, `nandIn2`, `nandOut`
@@ -77,10 +77,10 @@ final class Netlist private (
   def portCount: Int = ports.length
 
   /** Reserved net id of the [[core.High]] constant. */
-  val highNet: Int = 0
+  val highNet: Int = 1
 
   /** Reserved net id of the [[core.Low]] constant. */
-  val lowNet: Int = 1
+  val lowNet: Int = 0
 
   /** Dense id of `port`, or -1 if the port is not in this netlist. */
   def portIdOf(port: Port): Int = {
@@ -340,14 +340,14 @@ object Netlist {
       w += 1
     }
 
-    // Compact to dense net ids. Net 0 is the High constant, net 1 the Low constant.
+    // Compact to dense net ids. Net 0 is the Low constant, net 1 the High constant.
     val highRoot = find(highId)
     val lowRoot = find(lowId)
     val netOfPort = new Array[Int](portCount)
-    val rootToNet = mutable.HashMap[Int, Int](highRoot -> 0)
+    val rootToNet = mutable.HashMap[Int, Int](lowRoot -> 0)
     var nextNet = 2
     // If High and Low are wired together (a short), net 1 stays reserved but empty.
-    if (lowRoot != highRoot) rootToNet(lowRoot) = 1
+    if (highRoot != lowRoot) rootToNet(highRoot) = 1
     var pid = 0
     while (pid < portCount) {
       val r = find(pid)
