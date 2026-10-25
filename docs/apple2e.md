@@ -24,7 +24,7 @@ Each fact cites its source using the keys below. Page numbers for Sather are the
 
 ## 1. Prince of Persia requirements
 
-Release analysed: the 5.25" build, i.e. the `S/*525.S` variants plus the shared `S/` modules and the copy-protected boot in `CP/`. `S/VERSION.S:9` reads `"Prince of Persia 1.0  1/23/90 special"`, and `01 POP Source/Source/VERSION.S` reads `1.0 9/7/89`. `01 POP Source/Source` holds the 3.5" variants of the same modules (its `GRAFIX.S` is identical to `S/GRAFIX.S`). The source can't say which build the retail disk holds. The target media is the preserved original disk in [WAD]: **two WOZ images, `Prince of Persia side A.woz` and `side B.woz`** (233,481 bytes each: consistent with WOZ 1, whose 35 fixed 6,656-byte track blocks take 232,960 bytes; the header check is in §10).
+Release analysed: the 5.25" build, i.e. the `S/*525.S` variants plus the shared `S/` modules and the copy-protected boot in `CP/`. `S/VERSION.S:9` reads `"Prince of Persia 1.0  1/23/90 special"`, and `01 POP Source/Source/VERSION.S` reads `1.0 9/7/89`. `01 POP Source/Source` holds the 3.5" variants of the same modules (its `GRAFIX.S` is identical to `S/GRAFIX.S`). The source can't say which build the retail disk holds. The target media is the preserved original disk in [WAD]: **two WOZ images, `Prince of Persia side A.woz` and `side B.woz`** (233,481 bytes each; both are WOZ 1 files, with no FLUX chunk, §10).
 
 ### 1.1 Memory: 128K
 
@@ -50,8 +50,7 @@ A scan of every `.S` file for 65C02/65816 code (the Merlin `xc` directive; the `
 
 `IIGS` is set by `CHECKIIGS` [`S/GRAFIX525.S:2013–2030`]. It checks `$FBB3 = 6`, then `sec / jsr $FE1F`, which leaves carry set on every 8-bit Apple II because `$FE1F` holds an `RTS` there [TN7]. **PoP therefore runs on an NMOS 6502, and #86 stays off the critical path.**
 
-> [!WARNING]
-> The 5.25" **RW18** disk driver (Roland Gustafsson's 18-sector RWTS, loaded to main LC `$D000`) is **not in the repository**: only the 3.5" UniDisk version (`02 POP Disk Routines/RW1835/`) and the install and format tools are. The scan above can't cover it. Mitigation: the behavioral CPU (#56–#58) should log any opcode outside the NMOS set it implements, and M3 (#75) must confirm that the PoP scenario hits none.
+The 5.25" **RW18** disk driver (Roland Gustafsson's 18-sector RWTS, loaded to main LC `$D000`) is **not in the repository**: only the 3.5" UniDisk version (`02 POP Disk Routines/RW1835/`) and the install and format tools are. It was checked on the disk instead (§10). Its five pages were extracted from track 0 of side A, decoded the way `POPBOOT0` does it (sectors at skew `0E 0C 0A 08 06`, XORed with page `$2F`), and disassembled from `$D000` and the eight entries of its command table at `$D3C4`. All 493 reachable instructions are documented NMOS opcodes. The unreached bytes are the 6-and-2 translate table, the head-stepping delay tables, the copyright string and the dispatch table. The behavioral CPU's opcode tripwire (§8, M3) stays as a cheap guard.
 
 ### 1.3 Video modes
 
@@ -375,11 +374,11 @@ None of these are committed or available in CI (#8 §B). The reviewer has them.
 
 | Asset | File (under `$CPU_LEGO_ASSETS/apple2e/`) | Size | Layout | Validation |
 |---|---|---|---|---|
-| System ROM, unenhanced IIe | `apple2e.rom` | 16,384 | `$C000–$FFFF` image: file offset 0 = `$C000`. The `$C000–$C0FF` bytes are unused (I/O). The two 8K chips, "CD" (`$C000–$DFFF`) and "EF" (`$E000–$FFFF`), concatenated in that order. | `$FBB3 = $06`, `$FBC0 = $EA` [TN7] |
-| Video (character) ROM | `apple2e-video.rom` | 4,096 | Raw chip dump. Text and graphics halves are split by GR+2. SEGA–SEGC are the three low address bits (glyph row), VID0–VID5 and RA9/RA10 above them. Glyph bits are **inverted** (1 = dark) [Sather 8-11–8-14]. | Size. #63 locates the glyph for `A` and the inverse half to confirm the pin order of the upper address bits. |
-| Disk II boot ROM (16-sector) | `disk2-boot.rom` | 256 | Mapped at `$Cn00`; contains the `$Cn5C` read routine PoP calls (§1.7). | Size; the reviewer confirms that a DOS 3.3 disk boots |
-| Disk II sequencer ROM (16-sector / DOS 3.3) | `disk2-sequencer.rom` | 256 | Raw dump, **physical address order**. The device applies Sather's input wiring: sequence state on A0 and A5–A7, QA on A1, SHIFT/LOAD on A2, READ/WRITE on A3, read pulse on A4. The four data bits D4–D7 hold the next state and D0–D3 the data-register command [Sather 9-14–9-15, Table 9.3]. | Size. Sather's Figure 9.9 listing program serves as a cross-check. |
-| PoP disks | `pop-side-a.woz`, `pop-side-b.woz` | 233,481 each (WOZ 1) | [WAD] | Header `WOZ1`/`WOZ2`; content hash recorded in scenarios |
+| System ROM, unenhanced IIe | `apple2e.rom` | 16,384 | `$C000–$FFFF` image: file offset 0 = `$C000`. The `$C000–$C0FF` bytes are unused (I/O). The two 8K chips, "CD" 342-0135-A (`$C000–$DFFF`) and "EF" 342-0134-A (`$E000–$FFFF`), concatenated in that order. | `$FBB3 = $06`, `$FBC0 = $EA`, `$FE1F = $60` (RTS) [TN7] |
+| Video (character) ROM | `apple2e-video.rom` | 4,096 | Raw chip dump: the US 342-0133-A, or the **second 4 KiB** (US set) of the 8 KiB German/US 341-0161-A. Address bits: A0–A2 = SEGA–SEGC (glyph row), A3–A8 = VID0–VID5, A9 = RA9, A10 = RA10, A11 = GR+2 (text in the low 2 KiB, graphics in the high 2 KiB) [Sather 8-11–8-14; confirmed on a dump, §10]. Bit 0 is the **leftmost** dot, bit 7 is unused. Glyphs for RA10 = 1 (normal text) are stored **inverted** (1 = dark); those for RA10 = 0 (inverse and flashing) are stored lit. | Size; the `A` glyph (`08 14 22 22 3E 22 22 00`) at offset `$008` (lit) and `$408` (dark) |
+| Disk II boot ROM (16-sector) | `disk2-boot.rom` | 256 | P5A 341-0027-A, mapped at `$Cn00`; contains the `$Cn5C` read routine PoP calls (§1.7). **Some circulating dumps are scrambled** by the reader's pin mapping: in the `ROMS.ZIP` set, data bits 4–7 and address bits 5–7 are reversed. Unscramble them before use (§10). | Bytes `$00–$07` = `A2 20 A0 00 A2 03 86 3C`; bytes `$5C–$60` = `18 08 BD 8C C0`; `4C 01 08` (JMP `$0801`) at `$F8` |
+| Disk II sequencer ROM (16-sector / DOS 3.3) | `disk2-sequencer.rom` | 256 | P6A 342-0028-A, raw dump in **physical address order**. The device applies Sather's input wiring: the next-state outputs **D4, D5, D6, D7 feed back to A5, A0, A6, A7** (in that order), QA on A1, SHIFT/LOAD on A2, READ/WRITE on A3, and the read pulse on A4, **active low** (A4 = 0 while a pulse is present). D0–D3 hold the data-register command: `0–7` CLR, `8`/`C` NOP, `9` SL0, `A`/`E` SR, `B`/`F` LD, `D` SL1 [Sather 9-14–9-15, Table 9.3; wiring and polarity confirmed by simulation, §10]. | Size; bytes `$00–$07` = `18 D8 18 08 0A 0A 0A 0A` |
+| PoP disks | `pop-side-a.woz`, `pop-side-b.woz` | 233,481 each (WOZ 1) | [WAD]. Side A is write-protected; side B (which holds the saved game, §1.7) is not. | Header `WOZ1`/`WOZ2`; content hash recorded in scenarios |
 | ProDOS boot disk | `prodos.woz` (or `.po`/`.dsk`) | — | ProDOS 8 **1.9 or earlier** (2.0.x needs a 65C02) | — |
 | Commercial app | `appleworks.woz` (or `.po`) | — | AppleWorks **2.x** (unenhanced IIe, 128K) | — |
 
@@ -433,7 +432,7 @@ Proposed epic and sub-issue updates:
 5. **The Disk II needs the sequencer ROM as a second asset**, and the LSS-level model (§1.7, §7.1). #8 §B says "the Disk II slot ROM" in the singular.
 6. **Disk rotation by simulated time with a fractional accumulator**, not 8 sequencer steps per bit (§3.3). Update #70.
 7. **Scenarios need media-swap events.** PoP spans two disk sides (§1.7). #8 §G lists only input events. Update #74, and give the frontend a disk-swap action (#67).
-8. **No FLUX support needed:** WOZ 1 has no FLUX chunks, and the preserved PoP images have the size of WOZ 1 files (§1, [WAD]; header check in §10). Close the question in #71.
+8. **No FLUX support needed:** both preserved PoP images are WOZ 1 files, which have no FLUX chunks (§10). Close the question in #71.
 9. **The M5 target is 1.0204 MHz** (100% of the 490-tick clock), not 1.0205 MHz (§8).
 10. **Power-on RES is held 102,000 cycles** (Disk II 100 ms extension; IOU 512 lines without the card) (§3.4). Update #60.
 11. **Long cycle position:** if it is ever modelled, it stretches PHI2 at horizontal states `$40`/`$41`, not "every 65th cycle" at an unspecified point (§3.1).
@@ -441,12 +440,15 @@ Proposed epic and sub-issue updates:
 
 Paddle timing, for #73: a timer pulse lasts `(R + 100) × 0.022 µs` for a paddle of R Ω (150 kΩ pots: 2–3,302 µs). The Monitor's `PREAD` waits 10 cycles, then polls in an **11-cycle loop** (not 12, as its comment says) and saturates at 255 [Sather pp. 7-7–7-8, 7-29]. Model a paddle value p ∈ 0–255 as a pulse of `11·p + k` cycles. Calibrate `k` in #73 so that `PREAD` on the real ROM returns p for p ≤ 254.
 
-## 10. Checks for the reviewer (need assets)
+## 10. Asset checks
 
-These can't be verified without the copyrighted files. Each one belongs to the issue named:
+These were run on 2026-10-25 against the reviewer's dumps. The scripts are not committed; the results are:
 
-- The ROM ID bytes (§7.1), checked on load (#60).
-- The bit order of the video ROM's upper address inputs, from the glyph for `A` (#63).
-- The sequencer ROM's physical byte order matches the input wiring in §7.1 (#70).
-- RW18 executes no 65C02 opcodes: the opcode tripwire on the PoP scenario (§1.2, #75).
-- The WOZ version of the PoP images: the `WOZ1` header (#71).
+| Check | Result | Issue |
+|---|---|---|
+| ROM ID bytes | CD 342-0135-A + EF 342-0134-A give `$FBB3 = $06`, `$FBC0 = $EA` and an `RTS` at `$FE1F`, as [TN7] says for an unenhanced IIe. The reset vector is `$FA62`. | #60 |
+| Video ROM layout | On 341-0161-A, the second 4 KiB holds the US set (`[`, `@` and `{` where the first holds `Ä`, `§` and `ä`). `A` (code `$01`/`$41`) is at `$008`/`$208` stored lit and at `$408`/`$608` stored dark, so A3–A8 carry the character code and A10 = RA10. The top 2 KiB of each half hold graphics patterns. | #63 |
+| Sequencer ROM order | A sequencer simulation reads a synthetic 6-and-2 bitstream (sync bytes, then `D5 AA 96 …`) correctly with the raw P6A dump and Sather's wiring taken literally (D4–D7 → A5, A0, A6, A7) with an active-low read pulse. No other wiring or polarity works. This dump is **not** scrambled. | #70 |
+| Boot ROM | The P5A dump in the same set is scrambled. After reversing data bits 4–7 and address bits 5–7, it disassembles as coherent code: every branch lands on an instruction, with the `$Cn5C` read routine and `JMP $0801` at the end. The other address-bit permutations don't. The 13-sector (DOS 3.2) ROMs in the set are not usable. | #70 |
+| RW18 opcodes | No 65C02 opcodes (§1.2). All 16 sectors of track 0 decode with valid checksums, and the disk's boot sector holds the same skew and page tables as `POPBOOT0.S`. | #75 |
+| WOZ version | Both sides are `WOZ1`, INFO version 1, 35 tracks, no FLUX chunk. Track 0 sector 7 carries the HLS protection data: a long run of `$E7` nibbles in its data field (§1.7). | #71 |
