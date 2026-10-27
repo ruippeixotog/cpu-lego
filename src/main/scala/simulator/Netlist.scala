@@ -284,7 +284,7 @@ object Netlist {
       primA += -1
       primB += idOf(c.out)
       primC += -1
-      primAux += c.freq
+      primAux += c.halfPeriod
     }
 
     def addWire(a: Port, c: Port): Unit = {
