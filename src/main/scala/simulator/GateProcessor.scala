@@ -66,7 +66,7 @@ object GateProcessor {
   * new processor, time only moves forward through [[step]], [[runTo]] and [[run]], and nothing is shared between
   * threads. It is the reusable engine underneath live simulators (see [[Sim]]) and the workhorse of the test suite.
   *
-  * Simulation time is measured in ticks, with 1 tick = 1 nanosecond; delays and timestamps throughout are in ticks.
+  * Simulation time is measured in ticks; delays and timestamps throughout are in ticks.
   *
   * It is deliberately not a [[Sim]]: a Sim is a live, running simulation that peripherals interact with concurrently,
   * while a GateProcessor is a pure value that tests and simulators drive explicitly.
