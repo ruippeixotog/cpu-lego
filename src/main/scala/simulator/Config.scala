@@ -1,6 +1,6 @@
 package simulator
 
-/** Gate-level simulation delays, in ticks (1 tick = 1 nanosecond).
+/** Gate-level simulation delays, in ticks.
   *
   * @param wireDelay
   *   ticks for a driven value to propagate through a wire group

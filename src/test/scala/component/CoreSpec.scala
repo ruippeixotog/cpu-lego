@@ -65,12 +65,12 @@ class CoreSpec extends BaseSpec with SequentialScenarios {
       // 1e9 / (2 * 3e8) = 1.667 ticks -> 2
       halfPeriodOf(clockHz(3e8)) must be_==(2)
       // the achieved frequency then differs from the target by at most half a tick per half-period
-      val achieved = 1e9 / (2 * Clock.halfPeriodForHz(3e8))
+      val achieved = 1e9 / (2 * halfPeriodForHz(3e8))
       achieved must beCloseTo(3e8, 0.6e8)
     }
 
     "reject a non-positive target frequency" in {
-      Clock.halfPeriodForHz(0) must throwA[IllegalArgumentException]
+      halfPeriodForHz(0) must throwA[IllegalArgumentException]
     }
 
     "toggle at the derived half-period" in {
