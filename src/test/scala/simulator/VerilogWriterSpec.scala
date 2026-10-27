@@ -100,6 +100,42 @@ class VerilogWriterSpec extends Specification {
       v must contain("output y")
     }
 
+    "export a registered input pin whose net is driven inside the design as inout" in {
+      // The accumulator-on-a-bus case: the switch drives the bus net, but the pin is registered as an
+      // input. Assigning to an `input` port is illegal, so the port must be `inout`.
+      val in = new Port
+      val en = new Port
+      val bus = new Port
+      val top = CompositeComponent(
+        "top",
+        Map("s" -> Switch(in, bus, en)),
+        Nil,
+        Map(
+          "in" -> (Some(Direction.Input), in),
+          "en" -> (Some(Direction.Input), en),
+          "bus" -> (Some(Direction.Input), bus)
+        )
+      )
+
+      val v = VerilogWriter.write(Netlist(top), "sharedbus")
+      v must contain("inout bus")
+      v must contain("assign bus = en ? in : 1'bz;")
+    }
+
+    "infer a pin on a clock's net as an input, since the clock is not exported" in {
+      val clk = new Port
+      val top = CompositeComponent(
+        "top",
+        Map("c" -> Clock(5, clk)),
+        Nil,
+        Map("clk" -> (Option.empty[Direction], clk))
+      )
+
+      val v = VerilogWriter.write(Netlist(top), "clkdrv")
+      v must contain("input clk")
+      v must contain("// clock with half period 5 ticks driving clk")
+    }
+
     "escape hierarchical names that are not legal Verilog identifiers" in {
       val x = new Port
       val b = new Port
@@ -123,6 +159,27 @@ class VerilogWriterSpec extends Specification {
       val v = VerilogWriter.write(Netlist(top), "esc")
       v must contain("""wire \c.data[0] ;""")
       v must contain("""assign y = ~(\c.data[0]  & b);""")
+    }
+
+    "escape SystemVerilog keywords in top-level pin and module names" in {
+      val a = new Port
+      val b = new Port
+      val y = new Port
+      val top = CompositeComponent(
+        "top",
+        Map("g" -> NAND(a, b, y)),
+        Nil,
+        Map(
+          "logic" -> (Some(Direction.Input), a),
+          "b" -> (Some(Direction.Input), b),
+          "y" -> (Some(Direction.Output), y)
+        )
+      )
+
+      val v = VerilogWriter.write(Netlist(top), "int")
+      v must contain("""module \int (""")
+      v must contain("""input \logic """)
+      v must contain("""assign y = ~(\logic  & b);""")
     }
 
     "collapse bus pins back into vector ports" in {
