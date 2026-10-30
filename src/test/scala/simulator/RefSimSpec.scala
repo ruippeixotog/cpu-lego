@@ -54,9 +54,9 @@ class RefSimSpec extends BaseSpec {
     (in1, in2, out, Circuit(List(NAND(in1, in2, out)), Nil))
   }
 
-  private def clockCircuit(freq: Int): (Port, Circuit) = {
+  private def clockCircuit(halfPeriod: Int): (Port, Circuit) = {
     val clk = newPort()
-    (clk, Circuit(List(Clock(freq, clk)), Nil))
+    (clk, Circuit(List(Clock(halfPeriod, clk)), Nil))
   }
 
   /** Evaluate `f` until it returns a defined value, or fail after `timeoutMs`.
