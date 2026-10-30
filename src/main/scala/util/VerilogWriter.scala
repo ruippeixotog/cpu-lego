@@ -1,8 +1,9 @@
-package simulator
+package util
 
 import scala.collection.mutable
 
 import core.*
+import simulator.Netlist
 
 /** Structural Verilog export of a flat [[Netlist]], so DSL designs can be checked with external tools: simulated with
   * Verilator or Icarus, or proved equivalent to a behavioural model with yosys on combinational blocks.

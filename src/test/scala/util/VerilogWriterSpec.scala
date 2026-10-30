@@ -1,4 +1,4 @@
-package simulator
+package util
 
 import java.io.IOException
 import java.nio.file.Files
@@ -10,6 +10,7 @@ import component.binaryAdder
 import core.*
 import org.specs2.execute.Skipped
 import org.specs2.mutable.Specification
+import simulator.Netlist
 
 class VerilogWriterSpec extends Specification {
 
