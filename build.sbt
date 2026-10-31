@@ -8,7 +8,8 @@ libraryDependencies ++= Seq(
   "com.github.pureconfig" %% "pureconfig-generic-scala3" % "0.17.8",
   "org.scalacheck" %% "scalacheck" % "1.18.1" % "test",
   "org.specs2" %% "specs2-core" % "5.5.8" % "test",
-  "org.specs2" %% "specs2-scalacheck" % "5.5.8" % "test"
+  "org.specs2" %% "specs2-scalacheck" % "5.5.8" % "test",
+  "com.lihaoyi" %% "ujson" % "4.4.3" % "test"
 )
 
 scalacOptions ++= Seq(
