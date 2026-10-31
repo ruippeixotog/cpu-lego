@@ -4,8 +4,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentLinkedQueue, LinkedBlockingQueue}
 
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.duration.*
 import scala.concurrent.Await
+import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 import component.*
