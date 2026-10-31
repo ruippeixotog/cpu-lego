@@ -3,12 +3,12 @@ package simulator
 /** What to do when a fault is reported. */
 enum FaultPolicy {
 
-  /** Stop the simulation loop on the first fault: [[Sim.isRunning]] becomes false and [[Sim.failure]] completes with
-    * it.
+  /** Stop the simulation loop on the first fault: [[LiveSim.isRunning]] becomes false and [[LiveSim.failure]] completes
+    * with it.
     */
   case Halt
 
-  /** Keep simulating: faults are only delivered to [[Sim.faults]] subscribers and never stop the loop. */
+  /** Keep simulating: faults are only delivered to [[LiveSim.faults]] subscribers and never stop the loop. */
   case Continue
 }
 

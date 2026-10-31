@@ -5,7 +5,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, LinkedBlockingQueue}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.*
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.jdk.CollectionConverters.*
 
 import component.*
@@ -50,10 +50,6 @@ class RefSimSpec extends BaseSpec {
       }
       new PollSubscription(port, queue, () => closable.close())
     }
-
-    def faults(callback: Fault => Unit): AutoCloseable = () => ()
-
-    def failure: Future[Fault] = Future.never
   }
 
   private def nandCircuit(): (Port, Port, Port, Circuit) = {

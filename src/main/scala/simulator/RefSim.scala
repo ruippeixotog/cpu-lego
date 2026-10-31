@@ -16,7 +16,7 @@ import core.*
   *   simulation ticks per wall-clock second while running
   * @param onFault
   *   what to do when the engine reports a fault: [[FaultPolicy.Halt]] (the default) stops the simulation loop on the
-  *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[Sim.faults]] subscribers
+  *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[LiveSim.faults]] subscribers
   * @param portNames
   *   hierarchical port names used in fault reports; ports missing from the map fall back to an identity-based
   *   placeholder. Build one from a root component with `Index(root).ports.map(_.swap).toMap`.
@@ -41,7 +41,7 @@ object RefSim {
     *   simulation ticks per wall-clock second while running
     * @param onFault
     *   what to do when the engine reports a fault: [[FaultPolicy.Halt]] (the default) stops the simulation loop on the
-    *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[Sim.faults]] subscribers
+    *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[LiveSim.faults]] subscribers
     * @param portNames
     *   hierarchical port names used in fault reports; ports missing from the map fall back to an identity-based
     *   placeholder. Build one from a root component with `Index(root).ports.map(_.swap).toMap`.

@@ -51,7 +51,7 @@ import core.*
   *   simulation ticks per wall-clock second while running
   * @param onFault
   *   what to do when the engine reports a fault: [[FaultPolicy.Halt]] (the default) stops the simulation loop on the
-  *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[Sim.faults]] subscribers
+  *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[faults]] subscribers
   */
 class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000, onFault: FaultPolicy = FaultPolicy.Halt)
     extends Sim {
