@@ -42,6 +42,9 @@ trait Engine {
   /** The current simulation tick. */
   def tick: Long
 
+  /** Faults the engine has recorded since it was created, in recording order. */
+  def faults: Seq[Fault]
+
   /** An immutable view of the engine's current state, unaffected by later changes to the engine. */
   def snapshot: EngineState
 

@@ -17,9 +17,13 @@ object GateProcessor {
 
   /** Build a GateProcessor for the circuit: install gate behavior and tie the High/Low constant ports. High/Low wiring
     * is an implementation detail of this engine, not a general simulator concern.
+    *
+    * @param portNames
+    *   hierarchical port names used in fault reports; ports missing from the map fall back to an identity-based
+    *   placeholder
     */
-  def setup(c: Circuit, conf: Config): GateProcessor = {
-    val p = GateProcessor(c, conf).set(High, true).set(Low, false)
+  def setup(c: Circuit, conf: Config, portNames: Map[Port, String]): GateProcessor = {
+    val p = GateProcessor(c, conf, portNames = portNames).set(High, true).set(Low, false)
     import p.conf._
 
     c.components.foldLeft(p) {
@@ -53,8 +57,10 @@ object GateProcessor {
     p.watch(port1)(propagate).watch(port2)(propagate)
   }
 
-  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): GateProcessor =
-    setup(Circuit(root, extraWires), Config.default)
+  inline def setup(root: Component, extraWires: List[(Port, Port)] = Nil): GateProcessor = {
+    val portNames = Index(root).ports.map { case (name, port) => port -> name }.toMap
+    setup(Circuit(root, extraWires), Config.default, portNames)
+  }
 
   inline def setupAndRun(root: Component, maxTicks: Option[Long] = None): GateProcessor =
     setup(root).run(maxTicks)
@@ -76,7 +82,12 @@ final case class GateProcessor(
     private val events: TreeMap[Long, Vector[GateProcessor.Event]] = TreeMap(),
     private val portValues: Map[Port, Option[Boolean]] = Map().withDefaultValue(None),
     private val portObservers: Map[Port, List[GateProcessor => GateProcessor]] = Map().withDefaultValue(Nil),
-    private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None)
+    private val groupValues: Map[PortGroup, Option[Boolean]] = Map().withDefaultValue(None),
+    private val portNames: Map[Port, String] = Map.empty,
+    /** Faults recorded while processing events, in recording order: contention, non-convergence, device failures.
+      * Recorded instead of printed or thrown, so callers observe them explicitly.
+      */
+    val faults: Vector[Fault] = Vector.empty
 ) extends EngineState {
 
   private def schedule(after: Long, ev: GateProcessor.Event): GateProcessor =
@@ -182,16 +193,22 @@ final case class GateProcessor(
       }
 
     case PortGroupCheck(group) =>
-      val newValue = groupDrivenValues(group) match {
-        case Nil | List(_) => // everything's fine
-        case vs =>
-          vs.distinct match {
-            case List(v) => println("WARNING")
-            case _ => throw new Exception("PUM")
-          }
+      // The check runs scTolerance after the drive: a contention that settled on its own is not a fault. A
+      // persistent disagreement is recorded as a Contention fault instead of being thrown; agreeing multiple drivers
+      // are not a fault at all.
+      groupDrivenValues(group).distinct match {
+        case Nil | List(_) => this
+        case values =>
+          val nets = c.portsOf(group).toList.map(nameOf).sorted
+          copy(faults = faults :+ Fault.Contention(nets, values.sorted))
       }
-      this
   }
+
+  /** The hierarchical name of the port for fault reports, from the netlist name table; ports with no registered name
+    * fall back to an identity-based placeholder.
+    */
+  private def nameOf(port: Port): String =
+    portNames.getOrElse(port, s"<${Integer.toHexString(System.identityHashCode(port))}>")
 
   private def groupDrivenValues(group: PortGroup): List[Boolean] =
     c.portsOf(group).toList.map(portValues).flatten

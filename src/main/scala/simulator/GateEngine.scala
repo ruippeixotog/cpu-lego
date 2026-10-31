@@ -23,6 +23,8 @@ final class GateEngine(private var p: GateProcessor) extends Engine {
 
   def tick: Long = p.tick
 
+  def faults: Seq[Fault] = p.faults
+
   def snapshot: EngineState = p
 
   def watch(port: Port)(callback: Option[Boolean] => Unit): Unit =
