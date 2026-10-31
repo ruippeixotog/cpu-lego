@@ -12,9 +12,9 @@ enum FaultPolicy {
   case Continue
 }
 
-/** A structured fault: a condition in a simulated design or its execution, reported as data instead of through
-  * ad-hoc failure paths (printed warnings, thrown exceptions), so a fault never kills a simulation silently.
-  * Examples of use: a compiled engine reporting a net it could not settle, or a consumer halting on the first fault.
+/** A structured fault: a condition in a simulated design or its execution, reported as data instead of through ad-hoc
+  * failure paths (printed warnings, thrown exceptions), so a fault never kills a simulation silently. Examples of use:
+  * a compiled engine reporting a net it could not settle, or a consumer halting on the first fault.
   */
 sealed trait Fault
 
