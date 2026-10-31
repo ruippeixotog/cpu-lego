@@ -613,4 +613,150 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       sim.get(outs).sequence must beSome(Vector(true, false, true))
     }
   }
+
+  "A romFolded" should {
+
+    "match rom on random 16x8 and 64x4 contents" in {
+      forAll(Gen.listOfN(16, Gen.listOfN(8, Gen.oneOf(false, true)))) { data =>
+        assertRomMatches(data.map(_.toVector).toVector, 4)
+      }
+      forAll(Gen.listOfN(64, Gen.listOfN(4, Gen.oneOf(false, true)))) { data =>
+        assertRomMatches(data.map(_.toVector).toVector, 6)
+      }
+    }
+
+    "match rom on sparse contents (PLA path)" in {
+      // few enough 1-bits to take the PLA path: ones * (n-1) <= 2^(n+1) - 2
+      forAll(Gen.choose(0, 12), Gen.choose(1, 100)) { (ones, seed) =>
+        val rnd = new scala.util.Random(seed)
+        val positions =
+          rnd.shuffle((0 until 32).flatMap(w => (0 until 8).map(b => (w, b)))).take(ones)
+        var data = Vector.fill(32)(Vector.fill(8)(false))
+        positions.foreach { case (w, b) => data = data.updated(w, data(w).updated(b, true)) }
+        assertRomMatches(data, 5)
+      }
+    }
+
+    "read a single word with an empty address bus" in {
+      assertRomMatches(Vector(Vector(true, false, true)), 0)
+    }
+
+    "tie all-zero columns low" in {
+      assertRomMatches(Vector.fill(8)(Vector.fill(4)(false)), 3)
+    }
+
+    "throw when data and address bus sizes do not match" in {
+      val addr = newBus(2)
+      buildAndRun { romFolded(Seq(Seq(true)), addr) } must throwAn[AssertionError]
+    }
+
+    "throw when words have different widths" in {
+      val addr = newBus(1)
+      buildAndRun { romFolded(Seq(Seq(true), Seq(true, false)), addr) } must throwAn[AssertionError]
+    }
+
+    "use fewer NANDs than rom on a 512x48 random-ish ROM" in {
+      val rnd = new scala.util.Random(42)
+      val data = Vector.fill(512)(Vector.fill(48)(rnd.nextDouble() < 0.05))
+      val addr = newBus(9)
+      val (_, romComp) = buildComponent { rom(data, addr) }
+      val (_, foldedComp) = buildComponent { romFolded(data, addr) }
+      countNands(foldedComp) must beLessThan(countNands(romComp))
+    }
+  }
+
+  "A pla" should {
+
+    "match a Scala evaluator on random term tables" in {
+      forAll(genPlaCase) { case (n, outN, terms) =>
+        val ins = newBus(n)
+        val (outs, comp) = buildComponent { pla(ins, terms, outN) }
+        var sim = GateProcessor.setupAndRun(comp, Some(100000))
+        for (v <- 0 until (1 << n)) {
+          val inBits = v.toBoolVec(n).toVector
+          sim = sim.set(ins, inBits).run()
+          val expected = (0 until outN).map { o =>
+            terms.exists(t => t.outputs.contains(o) && evalTerm(t, inBits))
+          }
+          sim.get(outs).sequence must beSome(expected)
+        }
+      }
+    }
+
+    "leave undriven outputs low" in {
+      val ins = newBus(2)
+      val (outs, comp) = buildComponent {
+        pla(ins, Seq(Term(Vector(Some(true), Some(false)), Set(0))), 2)
+      }
+      var sim = GateProcessor.setupAndRun(comp, Some(100000))
+      sim = sim.set(ins, Seq(true, false)).run()
+      sim.get(outs).sequence must beSome(Seq(true, false))
+      sim = sim.set(ins, Seq(true, true)).run()
+      sim.get(outs).sequence must beSome(Seq(false, false))
+    }
+
+    "drive an all-don't-care term constantly high" in {
+      val (outs, sim) = buildAndRun { pla(newBus(2), Seq(Term(Vector(None, None), Set(0))), 1) }
+      sim.get(outs).sequence must beSome(Seq(true))
+    }
+
+    "reject a term wider than the inputs" in {
+      buildAndRun {
+        pla(newBus(2), Seq(Term(Vector(Some(true), None, Some(false)), Set(0))), 1)
+      } must throwAn[AssertionError]
+    }
+
+    "reject a term driving an out-of-range output" in {
+      buildAndRun {
+        pla(newBus(2), Seq(Term(Vector(Some(true), None), Set(2))), 2)
+      } must throwAn[AssertionError]
+    }
+
+    "reject a negative output count" in {
+      buildAndRun { pla(newBus(2), Seq.empty, -1) } must throwAn[AssertionError]
+    }
+  }
+
+  private def countNands(comp: Component): Int = comp match {
+    case NAND(_, _, _) => 1
+    case CompositeComponent(_, comps, _, _) => comps.values.map(countNands).sum
+    case _ => 0
+  }
+
+  private def assertRomMatches(data: Seq[Seq[Boolean]], addrN: Int): Unit = {
+    val addr = newBus(addrN)
+    val ((romOuts, foldedOuts), comp) = buildComponent { (rom(data, addr), romFolded(data, addr)) }
+    var sim = GateProcessor.setupAndRun(comp, Some(100000))
+    data.indices.foreach { w =>
+      sim = sim.set(addr, w.toBoolVec(addrN)).run()
+      val expected = data(w)
+      sim.get(romOuts).sequence must beSome(expected)
+      sim.get(foldedOuts).sequence must beSome(expected)
+    }
+  }
+
+  private def evalTerm(t: Term, in: Vector[Boolean]): Boolean =
+    t.pattern.zip(in).forall {
+      case (Some(b), v) => b == v
+      case (None, _) => true
+    }
+
+  private val genLiteral: Gen[Option[Boolean]] = Gen.frequency(
+    2 -> Gen.oneOf(true, false).map(b => Some(b)),
+    1 -> Gen.const(Option.empty[Boolean])
+  )
+
+  private def genTerm(n: Int, outN: Int): Gen[Term] = for {
+    pattern <- Gen.listOfN(n, genLiteral)
+    outputs <-
+      if (outN == 0) Gen.const(Set.empty[Int])
+      else Gen.listOf(Gen.choose(0, outN - 1)).map(_.toSet)
+  } yield Term(pattern.toVector, outputs)
+
+  private val genPlaCase: Gen[(Int, Int, Vector[Term])] = for {
+    n <- Gen.choose(1, 5)
+    outN <- Gen.choose(0, 4)
+    termCount <- Gen.choose(0, 8)
+    terms <- Gen.listOfN(termCount, genTerm(n, outN))
+  } yield (n, outN, terms.toVector)
 }

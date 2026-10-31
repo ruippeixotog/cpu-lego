@@ -192,3 +192,82 @@ def rom(data: Seq[Seq[Boolean]], addr: Bus): Spec[Bus] = newSpec {
     select.zip(col).map { (sel, v) => and(sel, if (v) High else Low) }.reduce(or)
   }.toVector
 }
+
+/** A sum-of-products term for [[pla]]: a pattern over the inputs, plus the outputs it drives.
+  *
+  * `pattern(i)` is the literal for input `i`: `Some(true)` requires the input high, `Some(false)` requires it low,
+  * `None` is don't-care (the input is left out of the product). `outputs` holds the indices of the outputs this term
+  * drives.
+  */
+case class Term(pattern: Vector[Option[Boolean]], outputs: Set[Int])
+
+/** Sum-of-products PLA: the shape of the 6502's decode ROM.
+  *
+  * Each term is built as an AND over its literals (don't-cares are left out of the product); each output is an OR over
+  * the terms that drive it. The input inverters are built once and shared by all terms; an output with no terms is tied
+  * low.
+  *
+  * The term table is validated: every pattern must be as wide as `inputs`, and every driven output must lie in
+  * `[0, outputs)`.
+  */
+def pla(inputs: Bus, terms: Seq[Term], outputs: Int): Spec[Bus] = newSpec {
+  assert(outputs >= 0, s"PLA output count must be non-negative, got $outputs")
+  terms.foreach { t =>
+    assert(
+      t.pattern.length == inputs.length,
+      s"Term pattern width ${t.pattern.length} does not match input width ${inputs.length}"
+    )
+    t.outputs.foreach { o =>
+      assert(o >= 0 && o < outputs, s"Term drives output $o, outside [0, $outputs)")
+    }
+  }
+
+  val notInputs = inputs.map(not)
+  val termPorts = terms.map { t =>
+    val literals = t.pattern.zipWithIndex.collect {
+      case (Some(true), i) => inputs(i)
+      case (Some(false), i) => notInputs(i)
+    }
+    if (literals.isEmpty) High else literals.reduce(and)
+  }
+  (0 until outputs).map { o =>
+    val drivers = termPorts.zip(terms).collect { case (p, t) if t.outputs.contains(o) => p }
+    if (drivers.isEmpty) Low else drivers.reduce(or)
+  }.toVector
+}
+
+/** A ROM like [[rom]], but smaller: constant-zero bits are skipped instead of built (no `and(sel, Low)` gates and
+  * smaller OR trees), and sparse contents are emitted as a [[pla]] instead. Like [[rom]], the address decoder is built
+  * once and shared across all output bits.
+  *
+  * Which structure is smaller is decided by a 2-input-gate heuristic on the number of 1-bits: the folded decoder spends
+  * about `2^(n+1)` ANDs on the address decoder, while a PLA spends about `n-1` ANDs per 1-bit minterm; the output OR
+  * trees cost the same either way, so the 1-bit count alone picks the winner.
+  *
+  * Same contract as [[rom]]: `data.length` must be `2^addr.length`, and all words must have the same width. [[rom]]
+  * itself is left untouched for SAP-1.
+  */
+def romFolded(data: Seq[Seq[Boolean]], addr: Bus): Spec[Bus] = newSpec {
+  assert(data.length == 1 << addr.length, "Data and address bus sizes do not match")
+  val width = data.head.length
+  assert(data.forall(_.length == width), "All data words must have the same width")
+
+  val totalOnes = data.foldLeft(0)(_ + _.count(identity))
+  val decoderAnds = (data.length << 1) - 2
+  val mintermAnds = totalOnes * (addr.length - 1).max(0)
+  if (mintermAnds <= decoderAnds) {
+    // Sparse contents: one minterm per 1-bit, as a PLA.
+    val terms = data.zipWithIndex.flatMap { (word, w) =>
+      val pattern = Vector.tabulate(addr.length)(i => Some(((w >> i) & 1) == 1))
+      word.zipWithIndex.collect { case (true, b) => Term(pattern, Set(b)) }
+    }
+    pla(addr, terms, width)
+  } else {
+    // Dense contents: one shared decoder, constant-zero bits skipped.
+    val select = decoder(addr, High)
+    data.transpose.map { col =>
+      val ones = select.zip(col).collect { case (sel, true) => sel }
+      if (ones.isEmpty) Low else ones.reduce(or)
+    }.toVector
+  }
+}
