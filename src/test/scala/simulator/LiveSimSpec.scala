@@ -34,6 +34,7 @@ class LiveSimSpec extends BaseSpec {
     def set(bus: Bus, values: Seq[Boolean]): Unit = ()
     def get(port: Port): Option[Boolean] = None
     def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get).toVector
+    def faults: Seq[Fault] = Seq.empty
     def snapshot: EngineState = new EngineState {
       def get(port: Port): Option[Boolean] = None
       def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get).toVector
