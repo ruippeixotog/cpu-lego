@@ -14,48 +14,111 @@ case class ComponentCreator(design: Design) {
 
   def create(moduleName: String, inPorts: Map[String, Port | Bus]): Spec[Map[String, Port | Bus]] = {
     val env = summon[BuilderEnv]
-    inPorts.foreach(env.register(_, _, Some(Direction.Input)))
-
     val module = design.modules(moduleName)
-    val portReg = mutable.Map[Int | String, Port]("0" -> Low, "1" -> High) // .withDefault(_ => new Port())
+    val portReg = mutable.Map[Int | String, Port]("0" -> Low, "1" -> High)
+
+    // Visible netnames by bit, for debuggable names in the built component. The display name prefers
+    // the `hdlname` attribute when present; hidden names (hide_name: 1) are skipped. Sorted by net
+    // name for determinism; the first display name wins when several nets alias the same bits.
+    val netNamesByBit: Map[Int, String] = {
+      val byBit = mutable.Map[Int, String]()
+      val seenNames = mutable.Set[String]()
+      module.netnames.toList.sortBy(_._1).foreach { case (name, net) =>
+        if (net.hideName != 1 && net.bits.forall(_.isInstanceOf[Int])) {
+          val display = net.attributes.get("hdlname").getOrElse(name)
+          if (seenNames.add(display))
+            net.bits.foreach {
+              case bit: Int => byBit.getOrElseUpdate(bit, display)
+              case _ => // unreachable: filtered above
+            }
+        }
+      }
+      byBit.toMap
+    }
+
+    // Wire port for a net bit, named from the netnames when the bit has a visible name.
+    def netPort(bit: Int | String): Port =
+      portReg.getOrElseUpdate(
+        bit,
+        bit match {
+          case b: Int =>
+            netNamesByBit.get(b).fold(new Port())(n => BuilderAPIMacros.NamedPort(Some(moduleName), n))
+          case _ => new Port()
+        }
+      )
+
+    // Register visible nets as named ports (no direction: they are internal, not boundary), so the
+    // Index and future fault/lint reports show RTL-meaningful names. Boundary ports registered below
+    // take precedence on name collisions.
+    netNamesByBit.toList
+      .groupBy(_._2)
+      .toList
+      .sortBy(_._1)
+      .foreach { case (name, bits) =>
+        val ports = bits.map(_._1).sorted.map(netPort)
+        if (ports.length == 1) env.register(name, ports.head, None)
+        else env.register(name, ports.toVector, None)
+      }
+
+    inPorts.foreach { case (name, p) =>
+      val dir = module.ports(name).direction match {
+        case DesignDirection.Input => Direction.Input
+        case DesignDirection.Output => Direction.Output
+        case DesignDirection.Inout => Direction.Inout
+      }
+      env.register(name, p, Some(dir))
+    }
 
     inPorts.foreach {
       case (name, p: Port) =>
         // println(s"[in] Connecting $name to ${module.ports(name).bits.head}")
-        p ~> portReg.getOrElseUpdate(module.ports(name).bits.head, new Port())
+        p ~> netPort(module.ports(name).bits.head)
       case (name, p: Bus) =>
-        module.ports(name).bits.zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
+        module.ports(name).bits.zipWithIndex.foreach { (bit, i) => p(i) ~> netPort(bit) }
     }
 
     val components = module.cells.map { case (compName, cell) =>
-      val inPorts = cell.portDirections
+      val portDirs =
+        if (cell.portDirections.nonEmpty) cell.portDirections
+        else ComponentCreator.knownPortDirections(cell.`type`)
+
+      val cellInPorts = portDirs
         .filter(_._2 != DesignDirection.Output)
-        .map { case (name, dir) =>
+        .map { case (name, _) =>
           name -> (cell.connections(name) match {
-            case Vector(bit) => portReg.getOrElseUpdate(bit, new Port())
-            case bits => bits.map { b => portReg.getOrElseUpdate(b, new Port()) }
+            case Vector(bit) => netPort(bit)
+            case bits => bits.map(netPort)
           })
         }
 
-      val outPorts = createFromType(compName, cell, inPorts)
+      val outPorts = createFromType(compName, cell, cellInPorts)
 
       outPorts.foreach {
         case (name, p: Port) =>
           // println(s"[comp $compName] Connecting $name to ${cell.connections(name).head}")
-          p ~> portReg.getOrElseUpdate(cell.connections(name).head, new Port())
+          p ~> netPort(cell.connections(name).head)
         case (name, p: Bus) =>
-          cell.connections(name).zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
+          cell.connections(name).zipWithIndex.foreach { (bit, i) => p(i) ~> netPort(bit) }
       }
     }
 
-    val outPorts = module.ports.filter(_._2.direction == DesignDirection.Output).map { case (name, port) =>
-      name -> (port.bits match {
-        case Vector(bit) => portReg(bit)
-        case _ => port.bits.map(portReg)
-      })
+    val outPorts = module.ports.toList.flatMap { case (name, port) =>
+      port.direction match {
+        case DesignDirection.Input =>
+          None
+        case DesignDirection.Output | DesignDirection.Inout =>
+          val dir = if (port.direction == DesignDirection.Inout) Direction.Inout else Direction.Output
+          val p = port.bits match {
+            case Vector(bit) =>
+              if (port.direction == DesignDirection.Inout) netPort(bit) else portReg(bit)
+            case _ =>
+              if (port.direction == DesignDirection.Inout) port.bits.map(netPort) else port.bits.map(portReg)
+          }
+          Some((name, dir, p))
+      }
     }
-    outPorts.foreach(env.register(_, _, Some(Direction.Output)))
-    outPorts
+    outPorts.foreach { case (name, dir, p) => env.register(name, p, Some(dir)) }
+    outPorts.map { case (name, _, p) => name -> p }.toMap
   }
 
   def orNot(in1: Port, in2: Port): Spec[Port] = newSpec {
@@ -76,7 +139,8 @@ case class ComponentCreator(design: Design) {
     // Semantics below transcribed from techlibs/common/simcells.v.
     def inPort(name: String): Port = inPorts(name).asInstanceOf[Port]
     def inPortsOf(names: String): Vector[Port] = names.map(c => inPort(c.toString)).toVector
-    cell.`type` match {
+    // Cell types instantiated directly in Verilog keep Yosys's backslash escape (e.g. `\$_TBUF_`).
+    cell.`type`.stripPrefix("\\") match {
       case "$_AND_" =>
         Map("Y" -> and(inPort("A"), inPort("B")))
       case "$_ANDNOT_" =>
@@ -121,6 +185,10 @@ case class ComponentCreator(design: Design) {
         Map("Y" -> orNot(inPort("A"), inPort("B")))
       case "$_SR_PP_" =>
         Map("Q" -> norLatch(inPort("S"), inPort("R"))._1)
+      case "$_TBUF_" | "$tribuf" =>
+        // Tri-state buffer: several TBUFs driving one net form a normal shared bus, which the
+        // wire group resolves (at most one driver enabled at a time).
+        Map("Y" -> switch(inPort("A"), inPort("E")))
       case "$_DFF_P_" =>
         Map("Q" -> dLatch(inPort("D"), inPort("C"))._1)
       case "$_DFFSR_PNN_" =>
@@ -137,7 +205,16 @@ case class ComponentCreator(design: Design) {
       case "$_XOR_" =>
         Map("Y" -> xor(inPort("A"), inPort("B")))
       case m if !m.startsWith("$") =>
-        create(m, inPorts)
+        // Submodule instance: keep it as a named subcomponent (unless its name is hidden) so the
+        // Index and future fault/lint reports show RTL-meaningful paths.
+        if (cell.hideName == 1) create(m, inPorts)
+        else {
+          val outerEnv = summon[BuilderEnv]
+          val innerSpec: Spec[Map[String, Port | Bus]] = create(m, inPorts)
+          val (subOut, subComp) = buildComponent(Some(compName), innerSpec)
+          outerEnv.add(compName, subComp)
+          subOut
+        }
       case _ =>
         val src = cell.attributes.get("src").map(s => s", src $s").getOrElse("")
         throw new IllegalArgumentException(s"Unsupported component type: ${cell.`type`} (cell $compName$src)")
@@ -146,6 +223,17 @@ case class ComponentCreator(design: Design) {
 }
 
 object ComponentCreator {
+
+  /** Port directions for cell types whose JSON omits `port_directions` (e.g. `$_TBUF_` instantiated directly in Verilog
+    * rather than produced by techmap). Unknown types map to empty, and the caller fails clearly when it looks up a
+    * missing port.
+    */
+  private def knownPortDirections(cellType: String): Map[String, Design.Direction] =
+    cellType.stripPrefix("\\") match {
+      case "$_TBUF_" | "$tribuf" =>
+        Map("A" -> Design.Direction.Input, "E" -> Design.Direction.Input, "Y" -> Design.Direction.Output)
+      case _ => Map.empty
+    }
 
   def fromVerilog(vFile: Path): ComponentCreator = {
     val tmpDir = Files.createTempDirectory("cpu-lego")

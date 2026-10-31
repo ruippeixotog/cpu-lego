@@ -32,6 +32,17 @@ object Design {
       connections: Map[String, Vector[Int | String]]
   )
 
+  // `port_directions` is absent from the JSON for cells Yosys did not derive itself
+  // (e.g. `$_TBUF_` instantiated directly in Verilog rather than produced by techmap).
+  private case class RawCell(
+      hideName: Int,
+      `type`: String,
+      parameters: Map[String, String],
+      attributes: Map[String, String],
+      portDirections: Option[Map[String, Direction]],
+      connections: Map[String, Vector[Int | String]]
+  )
+
   case class Net(
       hideName: Int,
       bits: Vector[Int | String],
@@ -62,7 +73,11 @@ object Design {
   private given ConfigReader[Direction] = deriveEnumerationReader
   private given ConfigReader[Module] = deriveReader
   private given ConfigReader[Port] = deriveReader
-  private given ConfigReader[Cell] = deriveReader
+  private given ConfigReader[RawCell] = deriveReader
+  private given ConfigReader[Cell] =
+    ConfigReader[RawCell].map(r =>
+      Cell(r.hideName, r.`type`, r.parameters, r.attributes, r.portDirections.getOrElse(Map.empty), r.connections)
+    )
   private given ConfigReader[Net] = deriveReader
   given ConfigReader[Design] = deriveReader
 
