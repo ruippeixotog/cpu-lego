@@ -31,13 +31,13 @@ class LiveSimSpec extends BaseSpec {
 
     def step(): Unit = ()
     def set(port: Port, value: Option[Boolean]): Unit = ()
-    def set(bus: Bus, values: Seq[Boolean]): Unit = ()
+    def set(bus: Ports, values: Seq[Boolean]): Unit = ()
     def get(port: Port): Option[Boolean] = None
-    def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get).toVector
+    def get(bus: Ports): Vector[Option[Boolean]] = bus.map(get).toVector
     def faults: Seq[Fault] = Seq.empty
     def snapshot: EngineState = new EngineState {
       def get(port: Port): Option[Boolean] = None
-      def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get).toVector
+      def get(bus: Ports): Vector[Option[Boolean]] = bus.map(get).toVector
     }
     def watch(port: Port)(callback: Option[Boolean] => Unit): Unit = ()
   }
