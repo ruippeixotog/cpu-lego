@@ -10,6 +10,7 @@ import org.specs2.mutable.Specification
 import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
+import util.halfPeriodForHz
 
 class CoreSpec extends BaseSpec with SequentialScenarios {
 
