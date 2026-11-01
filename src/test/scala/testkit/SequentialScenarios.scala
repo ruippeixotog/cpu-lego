@@ -23,12 +23,12 @@ trait SequentialScenarios { this: Specification & ScalaCheck =>
       actionFilter: (GateProcessor, Port, Boolean) => Boolean = (_, _, _) => true
   ) {
 
-    def withPorts(ports: Port | Bus | (Port, Boolean) | (Bus, Boolean)*) = {
+    def withPorts(ports: Port | Ports | (Port, Boolean) | (Ports, Boolean)*) = {
       val newPorts: Seq[(Port, Option[Boolean])] = ports.flatMap {
         case p: Port => Vector(p -> None)
-        case bus: Bus @unchecked => bus.map(_ -> None)
+        case bus: Ports @unchecked => bus.map(_ -> None)
         case (p: Port, v: Boolean) => Vector(p -> Some(v))
-        case (bus: Bus @unchecked, v: Boolean) => bus.map(_ -> Some(v))
+        case (bus: Ports @unchecked, v: Boolean) => bus.map(_ -> Some(v))
       }
       copy(ports = this.ports ++ newPorts)
     }

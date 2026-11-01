@@ -7,11 +7,11 @@ import core.*
 import ControlBus.*
 import ControlBus.Bit.*
 
-case class Input(d: Bus, ready: Port, hold: Port, int: Port, reset: Port, clk1: Port, clk2: Port)
-case class Output(a: Bus, sync: Port, dbin: Port, wait0: Port, wr: Port, hlda: Port, inte: Port)
+case class Input(d: Bus[8], ready: Port, hold: Port, int: Port, reset: Port, clk1: Port, clk2: Port)
+case class Output(a: Bus[16], sync: Port, dbin: Port, wait0: Port, wr: Port, hlda: Port, inte: Port)
 
-case class ControlBus(con: Bus) {
-  def apply(b: ControlBus.Bit) = con(b.ordinal)
+case class ControlBus(con: Bus[12]) {
+  def apply(b: ControlBus.Bit) = con.get(b.ordinal)
 }
 
 object ControlBus {
@@ -78,18 +78,18 @@ def i8080(in: Input): Spec[Output] = newSpec {
 //   val ram = component.ram(mdrOut, marOut, ???, ???)
 // }
 
-def bidirRegister(bus: Bus, load: Port, clk: Port, enable: Port): Spec[Bus] = newSpec {
+def bidirRegister[N <: Int](bus: Bus[N], load: Port, clk: Port, enable: Port): Spec[Bus[N]] = newSpec {
   val outs = register(bus, load, clk)
   buffered(enable)(outs) ~> bus
   outs
 }
 
-def alu(bus: Bus, clk: Port): Spec[Unit] = newSpec {
+def alu(bus: Bus[8], clk: Port): Spec[Unit] = newSpec {
   val acc = bidirRegister(bus, ???, clk, ???)
   val act = register(acc, ???, clk)
   val tmp = bidirRegister(bus, ???, ???, ???)
 
-  val flags = register(???, ???, clk)
+  val flags = register[8](???, ???, clk)
 
   // alu(act, tmp, carry)
   ???

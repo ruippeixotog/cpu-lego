@@ -16,8 +16,8 @@ import core.*
   * Returns `(result, cout)`: `result` is `a` shifted left with Low shifted in, and `cout` is the bit shifted out (`a`'s
   * most significant bit). The carry in is not used.
   */
-def asl(a: Bus): Spec[(Bus, Port)] = newSpec {
-  (Low +: a.dropRight(1), a.last)
+def asl(a: Bus[8]): Spec[(Bus[8], Port)] = newSpec {
+  (Low +: a.take(7), a(7))
 }
 
 /** Logical shift right by one (6502 LSR).
@@ -25,8 +25,8 @@ def asl(a: Bus): Spec[(Bus, Port)] = newSpec {
   * Returns `(result, cout)`: `result` is `a` shifted right with Low shifted in, and `cout` is the bit shifted out
   * (`a`'s least significant bit).
   */
-def lsr(a: Bus): Spec[(Bus, Port)] = newSpec {
-  (a.tail ++ Vector(Low), a.head)
+def lsr(a: Bus[8]): Spec[(Bus[8], Port)] = newSpec {
+  (a.drop(1) :+ Low, a(0))
 }
 
 /** Rotate left by one through carry (6502 ROL).
@@ -34,8 +34,8 @@ def lsr(a: Bus): Spec[(Bus, Port)] = newSpec {
   * Returns `(result, cout)`: `result` is `a` rotated left with `cin` shifted in, and `cout` is the bit rotated out
   * (`a`'s most significant bit).
   */
-def rol(a: Bus, cin: Port): Spec[(Bus, Port)] = newSpec {
-  (cin +: a.dropRight(1), a.last)
+def rol(a: Bus[8], cin: Port): Spec[(Bus[8], Port)] = newSpec {
+  (cin +: a.take(7), a(7))
 }
 
 /** Rotate right by one through carry (6502 ROR).
@@ -43,8 +43,8 @@ def rol(a: Bus, cin: Port): Spec[(Bus, Port)] = newSpec {
   * Returns `(result, cout)`: `result` is `a` rotated right with `cin` shifted in, and `cout` is the bit rotated out
   * (`a`'s least significant bit).
   */
-def ror(a: Bus, cin: Port): Spec[(Bus, Port)] = newSpec {
-  (a.tail ++ Vector(cin), a.head)
+def ror(a: Bus[8], cin: Port): Spec[(Bus[8], Port)] = newSpec {
+  (a.drop(1) :+ cin, a(0))
 }
 
 /** NMOS 6502 ADC in decimal mode.
@@ -71,10 +71,9 @@ def ror(a: Bus, cin: Port): Spec[(Bus, Port)] = newSpec {
   *   - Codebase64 wiki, "Decimal mode in NMOS 6500 series" — the same nibble-pair formulation, including the order in
   *     which the flags are sampled (see above).
   *
-  * Returns `(result, carry, overflow, negative, zero)`, in that order. Both operands must be 8 bits.
+  * Returns `(result, carry, overflow, negative, zero)`, in that order.
   */
-def decimalAdc(a: Bus, b: Bus, cin: Port): Spec[(Bus, Port, Port, Port, Port)] = newSpec {
-  assert(a.length == 8 && b.length == 8, "Decimal ADC operands must be 8 bits")
+def decimalAdc(a: Bus[8], b: Bus[8], cin: Port): Spec[(Bus[8], Port, Port, Port, Port)] = newSpec {
   val (lowSum, lowCout, _) = rippleAdder(a.take(4), b.take(4), cin)
   // The nibble sum is 5 bits (lowSum plus lowCout); it exceeds 9 iff it carried out or its low 4 bits exceed 9.
   val lowGt9 = or(lowCout, nibbleGt9(lowSum))
@@ -104,11 +103,9 @@ def decimalAdc(a: Bus, b: Bus, cin: Port): Spec[(Bus, Port, Port, Port, Port)] =
   * Sources for the NMOS decimal behaviour: see [[decimalAdc]].
   *
   * Returns `(result, carry, overflow, negative, zero)`, in that order, where `carry` is set iff no borrow was needed
-  * (the 6502 carry flag after SBC) and `cin` is that flag on entry (set means no borrow in). Both operands must be 8
-  * bits.
+  * (the 6502 carry flag after SBC) and `cin` is that flag on entry (set means no borrow in).
   */
-def decimalSbc(a: Bus, b: Bus, cin: Port): Spec[(Bus, Port, Port, Port, Port)] = newSpec {
-  assert(a.length == 8 && b.length == 8, "Decimal SBC operands must be 8 bits")
+def decimalSbc(a: Bus[8], b: Bus[8], cin: Port): Spec[(Bus[8], Port, Port, Port, Port)] = newSpec {
   // Low nibble: `a - b` with the incoming carry.
   val (lowDiff, lowCout, _) = rippleAdder(a.take(4), b.take(4).map(not), cin)
   val lowBorrow = not(lowCout)

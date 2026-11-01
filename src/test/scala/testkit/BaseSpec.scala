@@ -23,6 +23,10 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   // --- Utility methods ---
 
+  /** Tests pick widths at runtime: raw vectors become dynamic buses, whose widths are checked by the component asserts.
+    */
+  given vectorToBus[P <: Port]: Conversion[Vector[P], Bus[Int]] = v => Bus.dynamic(v)
+
   def buildAndRun[A](spec: Spec[A]): (A, GateProcessor) = {
     val (res, comp) = buildComponent(spec)
     (res, GateProcessor.setupAndRun(comp))
@@ -51,7 +55,7 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   def checkBus(
       sim: GateProcessor,
-      got: Bus,
+      got: Ports,
       expected: Int,
       label: String,
       bad: ListBuffer[String]

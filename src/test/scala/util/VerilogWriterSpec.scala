@@ -262,7 +262,7 @@ class VerilogWriterSpec extends Specification {
       val a = Vector.fill(16)(new Port)
       val b = Vector.fill(16)(new Port)
       val cin = new Port
-      val (s, cout) = binaryAdder(a, b, cin)
+      val (s, cout) = binaryAdder(Bus.of(16)(a), Bus.of(16)(b), cin)
       val env = summon[BuilderEnv]
       env.register("a", a, Some(Direction.Input))
       env.register("b", b, Some(Direction.Input))

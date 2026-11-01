@@ -53,7 +53,7 @@ class ArithmeticSpec extends BaseSpec {
 
     "pass the carry through on empty buses" in forAll { (carryIn: LogicLevel) =>
       val ((outs, carryOut), sim) = buildAndRun { binaryAdder(Vector(), Vector(), carryIn) }
-      outs must beEmpty
+      outs.ports must beEmpty
       sim.get(carryOut) must beSome(carryIn.toBool)
     }
   }
@@ -92,7 +92,7 @@ class ArithmeticSpec extends BaseSpec {
     * bounds).
     */
   private def checkAdder(
-      adder: (Bus, Bus, Port) => Spec[(Bus, Port, Port)],
+      adder: (Bus[Int], Bus[Int], Port) => Spec[(Bus[Int], Port, Port)],
       n: Int,
       vectors: Seq[(Int, Int, Int)]
   ): List[String] = {
@@ -142,7 +142,7 @@ class ArithmeticSpec extends BaseSpec {
 
     "pass the carry through on empty buses" in {
       val ((sum, cout, overflow), sim) = buildAndRun { rippleAdder(Vector(), Vector(), High) }
-      sum must beEmpty
+      sum.ports must beEmpty
       sim.get(cout) must beSome(true)
       sim.get(overflow) must beSome(false)
     }
@@ -186,7 +186,7 @@ class ArithmeticSpec extends BaseSpec {
 
     "pass the carry through on empty buses" in {
       val ((sum, cout, overflow), sim) = buildAndRun { prefixAdder(Vector(), Vector(), High) }
-      sum must beEmpty
+      sum.ports must beEmpty
       sim.get(cout) must beSome(true)
       sim.get(overflow) must beSome(false)
     }

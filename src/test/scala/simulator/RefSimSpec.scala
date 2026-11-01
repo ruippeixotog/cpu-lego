@@ -32,11 +32,11 @@ class RefSimSpec extends BaseSpec {
       callbacks.getOrElse(port, Nil).foreach(_(u))
     }
 
-    def set(bus: Bus, values: Seq[Boolean]): Unit =
+    def set(bus: Ports, values: Seq[Boolean]): Unit =
       bus.zip(values).foreach { case (p, v) => set(p, Some(v)) }
 
     def get(port: Port): Option[Boolean] = values.getOrElse(port, None)
-    def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get).toVector
+    def get(bus: Ports): Vector[Option[Boolean]] = bus.map(get).toVector
 
     def watch(port: Port)(callback: PortUpdate => Unit): AutoCloseable = {
       callbacks.update(port, callback :: callbacks.getOrElse(port, Nil))

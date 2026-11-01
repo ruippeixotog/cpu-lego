@@ -7,7 +7,7 @@ import util.halfPeriodForHz
 def multi(f: (Port, Port) => Port)(ports: Port*): Port =
   ports.reduce(f)
 
-def buffered(enable: Port)(xs: Bus): Spec[Bus] = newSpec {
+def buffered[N <: Int](enable: Port)(xs: Bus[N]): Spec[Bus[N]] = newSpec {
   xs.map(switch(_, enable))
 }
 

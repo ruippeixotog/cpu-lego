@@ -14,8 +14,8 @@ object BuilderAPIMacros {
     override def toString = owner.fold("")(_ + ".") + name
   }
 
-  def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
-    BuilderAPIMacros().newBus(n)
+  def newBus[N <: Int: Type](n: Expr[Int])(using Quotes): Expr[Bus[N]] =
+    BuilderAPIMacros().newBus[N](n)
 
   def newPort()(using Quotes): Expr[Port] =
     BuilderAPIMacros().newPort()
@@ -27,11 +27,11 @@ object BuilderAPIMacros {
 class BuilderAPIMacros()(using qctx: Quotes) {
   import qctx.reflect._
 
-  def newBus(n: Expr[Int]): Expr[Bus] =
-    registerNewPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
+  def newBus[N <: Int: Type](n: Expr[Int]): Expr[Bus[N]] =
+    registerNewPort('{ Bus.sized[N]($n)(Vector.tabulate($n)(idx => ${ newPort(Some('idx)) })) })(bus => '{ $bus.ports })
 
   def newPort(): Expr[Port] =
-    registerNewPort(newPort(None))
+    registerNewPort(newPort(None))(identity)
 
   def newPort(idxExpr: Option[Expr[Int]]): Expr[Port] = {
     val portName = Expr(macroOwner.name)
@@ -50,7 +50,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     val compName = Expr(macroOwner.name)
 
     def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
-      val exprs = macroOwner.paramSymss.flatten.map { sym =>
+      val exprs = macroOwner.paramSymss.flatten.filter(_.isTerm).map { sym =>
         val ValDef(name, ttree, _) = sym.tree: @unchecked
 
         ttree match {
@@ -106,8 +106,8 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     expr match {
       case '{ $port: Port } =>
         '{ $env.register(${ Expr(name) }, $port, $dir) }
-      case '{ $bus: Bus } =>
-        '{ $env.register(${ Expr(name) }, $bus, $dir) }
+      case '{ $bus: Bus[?] } =>
+        '{ $env.register(${ Expr(name) }, $bus.ports, $dir) }
       case '{ $p: Tuple } =>
         def registerTuple[B <: Tuple: Type](exprB: Expr[B], idx: Int): List[Expr[Unit]] = {
           exprB match {
@@ -134,14 +134,14 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     }
   }
 
-  def registerNewPort[A <: Port | Bus: Type](portExpr: Expr[A]): Expr[A] = {
+  def registerNewPort[A: Type](portExpr: Expr[A])(raw: Expr[A] => Expr[Port | Ports]): Expr[A] = {
     val portName = Expr(macroOwner.name)
 
     Expr.summon[BuilderEnv] match {
       case Some(env) =>
         '{
           val p = $portExpr
-          $env.register($portName, p)
+          $env.register($portName, ${ raw('p) })
           p
         }
       case _ =>

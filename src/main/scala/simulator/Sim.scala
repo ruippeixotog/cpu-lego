@@ -52,7 +52,7 @@ trait Sim {
 
   /** Drive every port of the bus. All drives are applied together.
     */
-  def set(bus: Bus, values: Seq[Boolean]): Unit
+  def set(bus: Ports, values: Seq[Boolean]): Unit
 
   /** The port's effective value in the last published state: the last driven value, else its wire-group value, else
     * None.
@@ -60,7 +60,7 @@ trait Sim {
   def get(port: Port): Option[Boolean]
 
   /** The effective value of every port of the bus. */
-  def get(bus: Bus): Vector[Option[Boolean]]
+  def get(bus: Ports): Vector[Option[Boolean]]
 
   /** Run `callback` on every effective-value change of the port. Callbacks run sequentially on a notifier thread, in
     * simulation order. When a callback runs, the published state already reflects the notified change: reading the port

@@ -100,7 +100,7 @@ final case class GateProcessor(
   def get(port: Port): Option[Boolean] =
     portValues(port).orElse(groupValues(c.groupOf(port)))
 
-  inline def get(bus: Bus): Vector[Option[Boolean]] = bus.map(get)
+  inline def get(bus: Ports): Vector[Option[Boolean]] = bus.map(get)
   inline def isLow(port: Port): Boolean = get(port) == Some(false)
   inline def isHigh(port: Port): Boolean = get(port) == Some(true)
 
@@ -111,7 +111,7 @@ final case class GateProcessor(
   inline def unset(port: Port): GateProcessor = set(port, None)
   inline def toggle(port: Port): GateProcessor = set(port, get(port).map(!_))
 
-  def set(bus: Bus, newValue: Seq[Boolean]): GateProcessor =
+  def set(bus: Ports, newValue: Seq[Boolean]): GateProcessor =
     bus.zip(newValue).foldLeft(this) { case (sim1, (p, v)) => sim1.set(p, v) }
 
   def setAfter(after: Long, port: Port, newValue: Option[Boolean]): GateProcessor =

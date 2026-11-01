@@ -77,7 +77,7 @@ class I8086Spec extends BaseSpec {
 
   "A daa" should {
     "match the 8088 rule for all AL values and AF/CF combinations" in {
-      val alIns = Vector.fill(8)(new Port)
+      val alIns = Bus.fill(8)(new Port)
       val af = new Port
       val cf = new Port
       val ((result, cfOut, afOut), comp) = buildComponent { daa(alIns, af, cf) }
@@ -94,7 +94,7 @@ class I8086Spec extends BaseSpec {
     }
 
     "match SingleStepTests/8088 hardware vectors" in {
-      val alIns = Vector.fill(8)(new Port)
+      val alIns = Bus.fill(8)(new Port)
       val af = new Port
       val cf = new Port
       val ((result, cfOut, afOut), comp) = buildComponent { daa(alIns, af, cf) }
@@ -112,7 +112,7 @@ class I8086Spec extends BaseSpec {
 
   "A das" should {
     "match the 8088 rule for all AL values and AF/CF combinations" in {
-      val alIns = Vector.fill(8)(new Port)
+      val alIns = Bus.fill(8)(new Port)
       val af = new Port
       val cf = new Port
       val ((result, cfOut, afOut), comp) = buildComponent { das(alIns, af, cf) }
@@ -129,7 +129,7 @@ class I8086Spec extends BaseSpec {
     }
 
     "match SingleStepTests/8088 hardware vectors" in {
-      val alIns = Vector.fill(8)(new Port)
+      val alIns = Bus.fill(8)(new Port)
       val af = new Port
       val cf = new Port
       val ((result, cfOut, afOut), comp) = buildComponent { das(alIns, af, cf) }
@@ -146,12 +146,12 @@ class I8086Spec extends BaseSpec {
   }
 
   private def checkAaaAas(
-      op: (Bus, Bus, Port) => Spec[(Bus, Bus, Port, Port)],
+      op: (Bus[8], Bus[8], Port) => Spec[(Bus[8], Bus[8], Port, Port)],
       ref: (Int, Int, Boolean) => (Int, Int, Boolean, Boolean),
       name: String
   ): Result = {
-    val alIns = Vector.fill(8)(new Port)
-    val ahIns = Vector.fill(8)(new Port)
+    val alIns = Bus.fill(8)(new Port)
+    val ahIns = Bus.fill(8)(new Port)
     val af = new Port
     val ((alOut, ahOut, afOut, cfOut), comp) = buildComponent { op(alIns, ahIns, af) }
     var sim = GateProcessor.setup(comp)

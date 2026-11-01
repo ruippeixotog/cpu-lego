@@ -11,11 +11,11 @@ final class GateEngine(private var p: GateProcessor) extends Engine {
 
   def set(port: Port, value: Option[Boolean]): Unit = p = p.set(port, value)
 
-  def set(bus: Bus, values: Seq[Boolean]): Unit = p = p.set(bus, values)
+  def set(bus: Ports, values: Seq[Boolean]): Unit = p = p.set(bus, values)
 
   def get(port: Port): Option[Boolean] = p.get(port)
 
-  def get(bus: Bus): Vector[Option[Boolean]] = p.get(bus)
+  def get(bus: Ports): Vector[Option[Boolean]] = p.get(bus)
 
   def runTo(deadline: Long): Unit = p = p.runTo(deadline)
 

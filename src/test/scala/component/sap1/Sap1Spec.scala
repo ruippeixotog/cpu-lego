@@ -23,7 +23,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       s"emit the correct words on a $op instruction" in {
         val instr = (0 until 4).map { i => if ((opcode & (1 << i)) == 0) Low else High }.toVector
         val clk, clr = newPort()
-        val (ControlBus(con), comp) = buildComponent { sequencer(instr, clk, clr) }
+        val (ControlBus(con), comp) = buildComponent { sequencer(Bus.of(4)(instr), clk, clr) }
 
         var t = 0
         val expectedCon = Vector(
@@ -56,7 +56,7 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       var expectedReg = Vector.fill(4)(Some(false)) ++ Vector.fill(4)(None)
 
       SequentialScenario(comp)
-        .withPorts(load -> false, clk -> true, clr -> false, enable -> true, ins -> false)
+        .withPorts(load -> false, clk -> true, clr -> false, enable -> true, ins.ports -> false)
         .onStart { _ =>
           expectedReg = Vector.fill(4)(Some(false)) ++ Vector.fill(4)(None)
         }
@@ -104,8 +104,8 @@ class Sap1Spec extends BaseSpec with SequentialScenarios {
       var addrReg: Vector[Option[Boolean]] = Vector.fill(4)(None)
 
       SequentialScenario(comp)
-        .withPorts(prog -> true, write -> false, addrIn -> false, dataIn -> false)
-        .withPorts(ins -> false, load -> true, clk -> true, enable -> false)
+        .withPorts(prog -> true, write -> false, addrIn.ports -> false, dataIn.ports -> false)
+        .withPorts(ins.ports -> false, load -> true, clk -> true, enable -> false)
         .withActionFilter { (sim, port, _) =>
           // Write-timing contract: the address and the mode must be stable
           // while `we` (here `write`) is High, or a cell can be left
