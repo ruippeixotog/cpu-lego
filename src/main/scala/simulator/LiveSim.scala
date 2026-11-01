@@ -48,7 +48,8 @@ import core.*
   * @param newEngine
   *   builds the simulation engine; invoked once, at construction
   * @param ticksPerSecond
-  *   simulation ticks per wall-clock second while running
+  *   simulation ticks per wall-clock second while running; real-time pacing is `ticksPerSecond = 1_000_000_000` (1 tick =
+  *   1 ns)
   * @param onFault
   *   what to do when the engine reports a fault: [[FaultPolicy.Halt]] (the default) stops the simulation loop on the
   *   first fault, [[FaultPolicy.Continue]] keeps simulating and only notifies [[faults]] subscribers

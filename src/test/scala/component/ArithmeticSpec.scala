@@ -7,7 +7,6 @@ import core.*
 import org.scalacheck.Prop.forAll
 import org.scalacheck.{Arbitrary, Gen}
 import org.specs2.ScalaCheck
-import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 import simulator.{Circuit, GateProcessor}
 import testkit.*
@@ -128,10 +127,6 @@ class ArithmeticSpec extends BaseSpec {
 
   private def allVectors(n: Int): Seq[(Int, Int, Int)] =
     for (a <- 0 to (1 << n) - 1; b <- 0 to (1 << n) - 1; c <- 0 to 1) yield (a, b, c)
-
-  private def report(bad: List[String], count: Int): Result =
-    if (bad.nonEmpty) failure(s"$count vectors, mismatches: ${bad.mkString("; ")}")
-    else ok
 
   "A rippleAdder" should {
     "match Scala arithmetic on all 8-bit operand pairs" in {
