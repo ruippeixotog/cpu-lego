@@ -10,9 +10,9 @@ import core.*
 // full operation, and by [[flagVAdd]]/[[flagVSub]] when only the operands and
 // the result are at hand (as with the 6502 decimal-mode intermediates).
 
-/** N flag: the most significant bit of `bus` (Low for an empty bus). */
+/** N flag: the most significant bit of `bus`. */
 def flagN(bus: Bus): Spec[Port] = newSpec {
-  if (bus.isEmpty) Low else bus.last
+  bus.last
 }
 
 /** Z flag: High iff every bit of `bus` is Low (High for an empty bus). */
@@ -31,44 +31,41 @@ def flagP(bus: Bus): Spec[Port] = newSpec {
 
 /** V flag for an addition: High iff `a` and `b` have the same sign bit and `sum`'s sign bit differs from it.
   *
-  * All three buses must have the same width; an empty bus gives Low.
+  * All three buses must have the same width.
   */
 def flagVAdd(a: Bus, b: Bus, sum: Bus): Spec[Port] = newSpec {
   assert(a.length == b.length && b.length == sum.length, "Buses must have the same width")
-  if (a.isEmpty) Low
-  else and(not(xor(a.last, b.last)), xor(sum.last, a.last))
+  and(not(xor(a.last, b.last)), xor(sum.last, a.last))
 }
 
 /** V flag for a subtraction: High iff `a` and `b` have different sign bits and `diff`'s sign bit differs from `a`'s.
   *
-  * All three buses must have the same width; an empty bus gives Low.
+  * All three buses must have the same width.
   */
 def flagVSub(a: Bus, b: Bus, diff: Bus): Spec[Port] = newSpec {
   assert(a.length == b.length && b.length == diff.length, "Buses must have the same width")
-  if (a.isEmpty) Low
-  else and(xor(a.last, b.last), xor(diff.last, a.last))
+  and(xor(a.last, b.last), xor(diff.last, a.last))
 }
 
 /** AF flag (8086 auxiliary carry) for an addition: the carry out of bit 3 of `a + b + cin`.
   *
-  * `a` and `b` must have the same width; buses shorter than 4 bits are zero-extended to a nibble, so the carry out of
-  * bit 3 is well defined for any width.
+  * `a` and `b` must have the same width and be at least 4 bits wide.
   */
 def flagAFAdd(a: Bus, b: Bus, cin: Port): Spec[Port] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
-  val (_, cout, _) = rippleAdder(zeroExtend(a.take(4), 4), zeroExtend(b.take(4), 4), cin)
+  assert(a.length >= 4, "AF operands must be at least 4 bits")
+  val (_, cout, _) = rippleAdder(a.take(4), b.take(4), cin)
   cout
 }
 
 /** AF flag (8086 auxiliary carry) for a subtraction: the borrow out of bit 3 of `a - b - borrow`.
   *
   * `borrow` is the borrow into bit 0: Low for a plain subtraction, the incoming carry flag for an 8086 SBB. `a` and `b`
-  * must have the same width; buses shorter than 4 bits are zero-extended to a nibble.
+  * must have the same width and be at least 4 bits wide.
   */
 def flagAFSub(a: Bus, b: Bus, borrow: Port): Spec[Port] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
-  val a4 = zeroExtend(a.take(4), 4)
-  val b4 = zeroExtend(b.take(4), 4)
-  val (_, cout, _) = rippleAdder(a4, b4.map(not), not(borrow))
+  assert(a.length >= 4, "AF operands must be at least 4 bits")
+  val (_, cout, _) = rippleAdder(a.take(4), b.take(4).map(not), not(borrow))
   not(cout)
 }

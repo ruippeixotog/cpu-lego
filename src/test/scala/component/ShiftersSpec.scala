@@ -3,6 +3,7 @@ package component
 import scala.collection.mutable.ListBuffer
 
 import component.BuilderAPI.*
+import component.m6502.*
 import core.*
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
@@ -11,33 +12,6 @@ import testkit.*
 import util.Implicits.*
 
 class ShiftersSpec extends BaseSpec {
-
-  private def report(bad: List[String], count: Int): Result =
-    if (bad.nonEmpty) failure(s"$count vectors, mismatches: ${bad.mkString("; ")}")
-    else ok
-
-  private def checkBus(
-      sim: GateProcessor,
-      got: Bus,
-      expected: Int,
-      n: Int,
-      label: String,
-      bad: ListBuffer[String]
-  ): Unit =
-    sim.get(got).sequence match {
-      case Some(bools) if bools.toInt != expected && bad.size < 5 => bad += s"$label: ${bools.toInt} != $expected"
-      case None if bad.size < 5 => bad += s"$label: did not settle"
-      case _ => ()
-    }
-
-  private def checkPort(
-      sim: GateProcessor,
-      got: Port,
-      expected: Boolean,
-      label: String,
-      bad: ListBuffer[String]
-  ): Unit =
-    if (sim.get(got) != Some(expected) && bad.size < 5) bad += s"$label: ${sim.get(got)} != $expected"
 
   "An asl" should {
     "shift left by one, carrying out the top bit, for all 8-bit values" in {
@@ -48,16 +22,10 @@ class ShiftersSpec extends BaseSpec {
       val bad = ListBuffer.empty[String]
       for (a <- 0 until 256) {
         sim = sim.set(aIns, a.toBoolVec(n)).run()
-        checkBus(sim, result, (a << 1) & 0xff, n, s"a=$a", bad)
+        checkBus(sim, result, (a << 1) & 0xff, s"a=$a", bad)
         checkPort(sim, cout, (a & 0x80) != 0, s"a=$a cout", bad)
       }
       report(bad.toList, 256)
-    }
-
-    "pass an empty bus through with cout Low" in {
-      val ((result, cout), sim) = buildAndRun { asl(Vector()) }
-      result must beEmpty
-      sim.get(cout) must beSome(false)
     }
   }
 
@@ -70,16 +38,10 @@ class ShiftersSpec extends BaseSpec {
       val bad = ListBuffer.empty[String]
       for (a <- 0 until 256) {
         sim = sim.set(aIns, a.toBoolVec(n)).run()
-        checkBus(sim, result, a >>> 1, n, s"a=$a", bad)
+        checkBus(sim, result, a >>> 1, s"a=$a", bad)
         checkPort(sim, cout, (a & 1) != 0, s"a=$a cout", bad)
       }
       report(bad.toList, 256)
-    }
-
-    "pass an empty bus through with cout Low" in {
-      val ((result, cout), sim) = buildAndRun { lsr(Vector()) }
-      result must beEmpty
-      sim.get(cout) must beSome(false)
     }
   }
 
@@ -94,7 +56,7 @@ class ShiftersSpec extends BaseSpec {
       for (a <- 0 until 256; c <- 0 to 1) {
         sim = sim.set(aIns, a.toBoolVec(n)).set(cin, c == 1).run()
         val expected = ((a << 1) & 0xff) | c
-        checkBus(sim, result, expected, n, s"a=$a cin=$c", bad)
+        checkBus(sim, result, expected, s"a=$a cin=$c", bad)
         checkPort(sim, cout, (a & 0x80) != 0, s"a=$a cin=$c cout", bad)
       }
       report(bad.toList, 512)
@@ -112,7 +74,7 @@ class ShiftersSpec extends BaseSpec {
       for (a <- 0 until 256; c <- 0 to 1) {
         sim = sim.set(aIns, a.toBoolVec(n)).set(cin, c == 1).run()
         val expected = (a >>> 1) | (c << 7)
-        checkBus(sim, result, expected, n, s"a=$a cin=$c", bad)
+        checkBus(sim, result, expected, s"a=$a cin=$c", bad)
         checkPort(sim, cout, (a & 1) != 0, s"a=$a cin=$c cout", bad)
       }
       report(bad.toList, 512)
@@ -135,7 +97,7 @@ class ShiftersSpec extends BaseSpec {
       count += 1
       sim = sim.set(aIns, a.toBoolVec(n)).set(amountIns, k.toBoolVec(amountBits)).run()
       val (expected, expCout) = ref(a, k, n)
-      checkBus(sim, result, expected, n, s"a=$a k=$k", bad)
+      checkBus(sim, result, expected, s"a=$a k=$k", bad)
       checkPort(sim, cout, expCout, s"a=$a k=$k cout", bad)
       if (bad.size >= 5) return report(bad.toList, count)
     }
@@ -160,7 +122,7 @@ class ShiftersSpec extends BaseSpec {
     val sign = (a >>> (n - 1)) & 1
     val fill = if (sign == 1) (mask << (n - k)) & mask else 0
     val result = if (k >= n) (if (sign == 1) mask else 0) else (a >>> k) | fill
-    val cout = k >= 1 && k <= n && ((a >>> (k - 1)) & 1) == 1
+    val cout = if (k == 0) false else if (k >= n) sign == 1 else ((a >>> (k - 1)) & 1) == 1
     (result, cout)
   }
 
@@ -168,13 +130,13 @@ class ShiftersSpec extends BaseSpec {
     val mask = (1 << n) - 1
     val r = k % n
     val result = if (r == 0) a else (((a << r) & mask) | (a >>> (n - r)))
-    (result, ((result >>> (n - 1)) & 1) == 1)
+    (result, (result & 1) == 1)
   }
 
   private def rotateRightRef(a: Int, k: Int, n: Int): (Int, Boolean) = {
     val r = k % n
     val result = if (r == 0) a else (a >>> r) | ((a << (n - r)) & ((1 << n) - 1))
-    (result, (result & 1) == 1)
+    (result, ((result >>> (n - 1)) & 1) == 1)
   }
 
   "A barrelShiftLeft" should {
@@ -229,20 +191,81 @@ class ShiftersSpec extends BaseSpec {
           val k = rng.nextInt(32)
           sim = sim.set(aIns, a.toBoolVec(n)).set(amountIns, k.toBoolVec(5)).run()
           val (expected, expCout) = ref(a, k, n)
-          checkBus(sim, result, expected, n, s"$name a=$a k=$k", bad)
+          checkBus(sim, result, expected, s"$name a=$a k=$k", bad)
           checkPort(sim, cout, expCout, s"$name a=$a k=$k cout", bad)
         }
       }
       report(bad.toList, 2500)
     }
+  }
 
-    "pass empty buses through with cout Low" in {
-      val ((r1, c1), sim1) = buildAndRun { barrelShiftLeft(Vector(), Vector()) }
-      r1 must beEmpty
-      sim1.get(c1) must beSome(false)
-      val ((r2, c2), sim2) = buildAndRun { barrelRotateRight(Vector(), Vector()) }
-      r2 must beEmpty
-      sim2.get(c2) must beSome(false)
+  // Hardware vectors from SingleStepTests/8088 (D0.0, D0.1, D2.0, D2.1, D2.7),
+  // checked against the circuits directly rather than through the Scala refs.
+  // Rotate counts of 0 are excluded: the 8086 leaves the flags unchanged for a
+  // zero count, which a cout-returning function cannot express.
+  "The barrel rotates and SAR" should {
+    "match SingleStepTests/8088 hardware vectors" in {
+      val bad = ListBuffer.empty[String]
+      var count = 0
+      def check(
+          op: (Bus, Bus) => Spec[(Bus, Port)],
+          vectors: Seq[(Int, Int, Int, Boolean)],
+          amountBits: Int
+      ): Unit = {
+        val aIns = Vector.fill(8)(new Port)
+        val amountIns = Vector.fill(amountBits)(new Port)
+        val ((result, cout), comp) = buildComponent { op(aIns, amountIns) }
+        var sim = GateProcessor.setup(comp)
+        for ((a, k, r, c) <- vectors) {
+          count += 1
+          sim = sim.set(aIns, a.toBoolVec(8)).set(amountIns, k.toBoolVec(amountBits)).run()
+          checkBus(sim, result, r, s"a=$a k=$k", bad)
+          checkPort(sim, cout, c, s"a=$a k=$k cout", bad)
+        }
+      }
+      // ROL by 1 (D0.0), including 0x98, whose carry the old code got wrong.
+      check(
+        barrelRotateLeft,
+        Seq(
+          (0x3e, 1, 0x7c, false),
+          (0xfc, 1, 0xf9, true),
+          (0x61, 1, 0xc2, false),
+          (0x70, 1, 0xe0, false),
+          (0x98, 1, 0x31, true)
+        ),
+        5
+      )
+      // ROR by 1 (D0.1).
+      check(
+        barrelRotateRight,
+        Seq((0x1d, 1, 0x8e, true), (0xc9, 1, 0xe4, true), (0x12, 1, 0x09, false), (0x98, 1, 0x4c, false)),
+        5
+      )
+      // ROL by CL (D2.0).
+      check(
+        barrelRotateLeft,
+        Seq((0x3e, 42, 0xf8, false), (0x61, 13, 0x2c, false), (0x70, 20, 0x07, true), (0x35, 3, 0xa9, true)),
+        6
+      )
+      // ROR by CL (D2.1).
+      check(
+        barrelRotateRight,
+        Seq((0x3e, 42, 0x8f, true), (0x61, 13, 0x0b, false), (0x70, 20, 0x07, false), (0x35, 3, 0xa6, true)),
+        6
+      )
+      // SAR by CL (D2.7), including a count above the width (0x8f by 37).
+      check(
+        barrelShiftRightArithmetic,
+        Seq(
+          (0xa1, 22, 0xff, true),
+          (0x31, 21, 0x00, false),
+          (0x55, 5, 0x02, true),
+          (0xb1, 12, 0xff, true),
+          (0x8f, 37, 0xff, true)
+        ),
+        6
+      )
+      report(bad.toList, count)
     }
   }
 }

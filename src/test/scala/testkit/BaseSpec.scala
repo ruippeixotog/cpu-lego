@@ -1,6 +1,7 @@
 package testkit
 
 import scala.annotation.targetName
+import scala.collection.mutable.ListBuffer
 
 import component.BuilderAPI.*
 import core.*
@@ -41,6 +42,34 @@ abstract class BaseSpec extends Specification with ScalaCheck {
   def foreachTick(comp: Component, fromTick: Int, toTick: Int)(f: (Int, GateProcessor) => Result): Result = {
     runPlan(comp, (fromTick to toTick).map { tick => (tick, f(tick, _)) }*)
   }
+
+  // --- Shared spec helpers (used by the component specs) ---
+
+  def report(bad: List[String], count: Int): Result =
+    if (bad.nonEmpty) failure(s"$count vectors, mismatches: ${bad.mkString("; ")}")
+    else ok
+
+  def checkBus(
+      sim: GateProcessor,
+      got: Bus,
+      expected: Int,
+      label: String,
+      bad: ListBuffer[String]
+  ): Unit =
+    sim.get(got).sequence match {
+      case Some(bools) if bools.toInt != expected && bad.size < 5 => bad += s"$label: ${bools.toInt} != $expected"
+      case None if bad.size < 5 => bad += s"$label: did not settle"
+      case _ => ()
+    }
+
+  def checkPort(
+      sim: GateProcessor,
+      got: Port,
+      expected: Boolean,
+      label: String,
+      bad: ListBuffer[String]
+  ): Unit =
+    if (sim.get(got) != Some(expected) && bad.size < 5) bad += s"$label: ${sim.get(got)} != $expected"
 
   // --- Extension methods ---
 

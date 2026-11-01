@@ -4,26 +4,12 @@ import scala.collection.mutable.ListBuffer
 
 import component.BuilderAPI.*
 import core.*
-import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 import simulator.GateProcessor
 import testkit.*
 import util.Implicits.*
 
 class FlagsSpec extends BaseSpec {
-
-  private def report(bad: List[String], count: Int): Result =
-    if (bad.nonEmpty) failure(s"$count vectors, mismatches: ${bad.mkString("; ")}")
-    else ok
-
-  private def checkPort(
-      sim: GateProcessor,
-      got: Port,
-      expected: Boolean,
-      label: String,
-      bad: ListBuffer[String]
-  ): Unit =
-    if (sim.get(got) != Some(expected) && bad.size < 5) bad += s"$label: ${sim.get(got)} != $expected"
 
   "flagN, flagZ and flagP" should {
     "match Scala bit tests for all 8-bit values" in {
@@ -56,12 +42,6 @@ class FlagsSpec extends BaseSpec {
       sim.get(parity) must beSome(false)
     }
 
-    "treat an empty bus as zero" in {
-      val ((neg, zero, parity), sim) = buildAndRun { (flagN(Vector()), flagZ(Vector()), flagP(Vector())) }
-      sim.get(neg) must beSome(false)
-      sim.get(zero) must beSome(true)
-      sim.get(parity) must beSome(true)
-    }
   }
 
   "flagVAdd" should {
