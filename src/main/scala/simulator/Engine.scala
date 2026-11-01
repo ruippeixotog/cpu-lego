@@ -53,4 +53,11 @@ trait Engine {
     * block — use it only to observe.
     */
   def watch(port: Port)(callback: Option[Boolean] => Unit): Unit
+
+  /** Attach a device: a peripheral that lives in simulated time (see [[Device]]). The device's `onAttach` runs at the
+    * current simulated instant, after the simulation settles to the current tick, and its callbacks then run at the end
+    * of every batch in which a watched pin changes. Returns a handle; detaching through it removes the device.
+    * Engine-level attach and detach take effect at the current instant; live hot-plug scheduling is a follow-up.
+    */
+  def attach(device: Device): DeviceHandle
 }

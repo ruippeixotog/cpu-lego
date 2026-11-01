@@ -31,4 +31,17 @@ final class GateEngine(private var p: GateProcessor) extends Engine {
     p = p.watch(port) { q =>
       callback(q.get(port)); q
     }
+
+  def attach(device: Device): DeviceHandle = {
+    p = p.attach(device)
+    new GateDeviceHandle(this, device)
+  }
+
+  private[simulator] def detachDevice(device: Device): Unit =
+    p = p.detach(device)
+}
+
+/** A [[DeviceHandle]] over a [[GateEngine]]: detaching swaps the engine's processor for one without the device. */
+private final class GateDeviceHandle(engine: GateEngine, device: Device) extends DeviceHandle {
+  def detach(): Unit = engine.detachDevice(device)
 }
