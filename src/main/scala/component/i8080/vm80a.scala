@@ -15,7 +15,7 @@ case class VM80Input(
     f1: Port = new Port(),
     f2: Port = new Port(),
     reset: Port = new Port(),
-    d: Bus[8] @inout = Bus.of(8)(Vector.fill(8)(new Port())),
+    d: Bus[8] @inout = Bus.fill(8)(new Port()),
     hold: Port = new Port(),
     ready: Port = new Port(),
     int: Port = new Port()

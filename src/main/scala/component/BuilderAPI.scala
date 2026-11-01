@@ -19,8 +19,7 @@ object BuilderAPI {
   // port operations
 
   inline def newPort(): Port = ${ BuilderAPIMacros.newPort() }
-  inline def newBus(n: Int): Bus[n.type] = Bus.assume[n.type](newPorts(n))
-  inline def newPorts(inline n: Int): Ports = ${ BuilderAPIMacros.newBus('n) }
+  inline def newBus(n: Int): Bus[n.type] = ${ BuilderAPIMacros.newBus[n.type]('n) }
 
   extension (self: Port) {
     inline def ~>(port: Port)(using env: BuilderEnv) =
@@ -30,7 +29,7 @@ object BuilderAPI {
   extension [N <: Int](self: Bus[N]) {
     inline def ~>(that: Bus[N])(using env: BuilderEnv) = {
       assert(self.length == that.length, "Connected port vectors are not the same size")
-      self.ports.zip(that.ports).foreach(env.wire)
+      self.zip(that).foreach(env.wire)
     }
   }
 

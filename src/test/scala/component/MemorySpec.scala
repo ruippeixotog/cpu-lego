@@ -579,7 +579,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       forAll(Gen.choose(1, 6)) { addrN =>
         forAll(Gen.listOfN(1 << addrN, Gen.listOfN(4, Gen.oneOf(false, true)))) { data =>
           val addr = newBus(addrN)
-          val (outs, comp) = buildComponent { rom(data, addr) }
+          val (outs, comp) = buildComponent { rom(data.head.length, data, addr) }
           outs.ports must haveLength(data.head.length)
 
           def addrIdx(sim: GateProcessor) = sim.get(addr).sequence.get.toInt
@@ -596,19 +596,17 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "throw when data and address bus sizes do not match" in {
       val addr = newBus(2)
-      buildAndRun { rom(Seq(Seq(true)), addr) } must throwAn[AssertionError]
+      buildAndRun { rom(1, Seq(Seq(true)), addr) } must throwAn[AssertionError]
     }
 
     "throw when a data entry has the wrong size" in {
-      // there is no explicit assertion for this; the ragged data fails
-      // inside `transpose` with a clear error
       val addr = newBus(1)
-      buildAndRun { rom(Seq(Seq(true), Seq(true, false)), addr) } must throwA[IllegalArgumentException]
+      buildAndRun { rom(1, Seq(Seq(true), Seq(true, false)), addr) } must throwAn[AssertionError]
     }
 
     "read a single word with an empty address bus" in {
       val data = Seq(Seq(true, false, true))
-      val (outs, sim) = buildAndRun { rom(data, Vector()) }
+      val (outs, sim) = buildAndRun { rom(3, data, Vector()) }
       outs.ports must haveLength(3)
       sim.get(outs).sequence must beSome(Vector(true, false, true))
     }

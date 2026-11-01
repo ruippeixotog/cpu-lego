@@ -52,21 +52,19 @@ def sequencer(instr: Bus[4], clk: Port, clr: Port): Spec[ControlBus] = newSpec {
   val (lda, add, sub, _, _, _, _, _, _, _, _, _, _, _, out, _) = decoder(instr, High).toTuple
 
   ControlBus(
-    Bus.of(12)(
-      Vector(
-        orM(and(t4, out)),
-        orM(and(t5, add), and(t5, sub)),
-        orM(and(t6, add), and(t6, sub)),
-        orM(and(t6, sub)),
-        orM(and(t4, out)),
-        orM(and(t5, lda), and(t6, add), and(t6, sub)),
-        orM(and(t4, lda), and(t4, add), and(t4, sub)),
-        orM(t3),
-        orM(t3, and(t5, lda), and(t5, add), and(t5, sub)),
-        orM(t1, and(t4, lda), and(t4, add), and(t4, sub)),
-        orM(t1),
-        orM(t2)
-      )
+    Bus(
+      orM(and(t4, out)),
+      orM(and(t5, add), and(t5, sub)),
+      orM(and(t6, add), and(t6, sub)),
+      orM(and(t6, sub)),
+      orM(and(t4, out)),
+      orM(and(t5, lda), and(t6, add), and(t6, sub)),
+      orM(and(t4, lda), and(t4, add), and(t4, sub)),
+      orM(t3),
+      orM(t3, and(t5, lda), and(t5, add), and(t5, sub)),
+      orM(t1, and(t4, lda), and(t4, add), and(t4, sub)),
+      orM(t1),
+      orM(t2)
     )
   )
 }
