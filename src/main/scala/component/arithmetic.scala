@@ -136,3 +136,9 @@ def compare(a: Bus, b: Bus): Spec[(Port, Port, Port)] = newSpec {
   val ltSigned = if (a.isEmpty) Low else xor(overflow, diff.last)
   (eq, ltUnsigned, ltSigned)
 }
+
+/** A nibble is greater than 9 iff its top bit is set and either of the next two bits is set (values 10..15). */
+def nibbleGt9(nibble: Bus): Spec[Port] = newSpec {
+  assert(nibble.length == 4, "A nibble must be 4 bits")
+  and(nibble(3), or(nibble(2), nibble(1)))
+}

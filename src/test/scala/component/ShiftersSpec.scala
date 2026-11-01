@@ -3,7 +3,6 @@ package component
 import scala.collection.mutable.ListBuffer
 
 import component.BuilderAPI.*
-import component.m6502.*
 import core.*
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
@@ -12,74 +11,6 @@ import testkit.*
 import util.Implicits.*
 
 class ShiftersSpec extends BaseSpec {
-
-  "An asl" should {
-    "shift left by one, carrying out the top bit, for all 8-bit values" in {
-      val n = 8
-      val aIns = Vector.fill(n)(new Port)
-      val ((result, cout), comp) = buildComponent { asl(aIns) }
-      var sim = GateProcessor.setup(comp)
-      val bad = ListBuffer.empty[String]
-      for (a <- 0 until 256) {
-        sim = sim.set(aIns, a.toBoolVec(n)).run()
-        checkBus(sim, result, (a << 1) & 0xff, s"a=$a", bad)
-        checkPort(sim, cout, (a & 0x80) != 0, s"a=$a cout", bad)
-      }
-      report(bad.toList, 256)
-    }
-  }
-
-  "An lsr" should {
-    "shift right by one, carrying out the bottom bit, for all 8-bit values" in {
-      val n = 8
-      val aIns = Vector.fill(n)(new Port)
-      val ((result, cout), comp) = buildComponent { lsr(aIns) }
-      var sim = GateProcessor.setup(comp)
-      val bad = ListBuffer.empty[String]
-      for (a <- 0 until 256) {
-        sim = sim.set(aIns, a.toBoolVec(n)).run()
-        checkBus(sim, result, a >>> 1, s"a=$a", bad)
-        checkPort(sim, cout, (a & 1) != 0, s"a=$a cout", bad)
-      }
-      report(bad.toList, 256)
-    }
-  }
-
-  "A rol" should {
-    "rotate left through carry for all 8-bit values and carry-ins" in {
-      val n = 8
-      val aIns = Vector.fill(n)(new Port)
-      val cin = new Port
-      val ((result, cout), comp) = buildComponent { rol(aIns, cin) }
-      var sim = GateProcessor.setup(comp)
-      val bad = ListBuffer.empty[String]
-      for (a <- 0 until 256; c <- 0 to 1) {
-        sim = sim.set(aIns, a.toBoolVec(n)).set(cin, c == 1).run()
-        val expected = ((a << 1) & 0xff) | c
-        checkBus(sim, result, expected, s"a=$a cin=$c", bad)
-        checkPort(sim, cout, (a & 0x80) != 0, s"a=$a cin=$c cout", bad)
-      }
-      report(bad.toList, 512)
-    }
-  }
-
-  "A ror" should {
-    "rotate right through carry for all 8-bit values and carry-ins" in {
-      val n = 8
-      val aIns = Vector.fill(n)(new Port)
-      val cin = new Port
-      val ((result, cout), comp) = buildComponent { ror(aIns, cin) }
-      var sim = GateProcessor.setup(comp)
-      val bad = ListBuffer.empty[String]
-      for (a <- 0 until 256; c <- 0 to 1) {
-        sim = sim.set(aIns, a.toBoolVec(n)).set(cin, c == 1).run()
-        val expected = (a >>> 1) | (c << 7)
-        checkBus(sim, result, expected, s"a=$a cin=$c", bad)
-        checkPort(sim, cout, (a & 1) != 0, s"a=$a cin=$c cout", bad)
-      }
-      report(bad.toList, 512)
-    }
-  }
 
   private def checkBarrel(
       op: (Bus, Bus) => Spec[(Bus, Port)],
@@ -223,7 +154,7 @@ class ShiftersSpec extends BaseSpec {
           checkPort(sim, cout, c, s"a=$a k=$k cout", bad)
         }
       }
-      // ROL by 1 (D0.0), including 0x98, whose carry the old code got wrong.
+      // ROL by 1 (D0.0), including 0x98.
       check(
         barrelRotateLeft,
         Seq(

@@ -6,14 +6,15 @@ import core.*
 
 // 8086 decimal-adjust helpers (DAA, DAS, AAA, AAS).
 //
-// The low-nibble test runs first and its result feeds the high-nibble test. DAA and DAS test the *original* AL against
-// an AF-dependent threshold (see [[daa]]), which is the 8088 behaviour; it differs from Intel's current pseudocode
-// for AF = 1 and AL in 0x9A..0x9F.
+// The low-nibble test runs first and its result feeds the high-nibble test.
 
-/** A nibble is greater than 9 iff its top bit is set and either of the next two bits is set (values 10..15). */
-private def nibbleGt9(nibble: Bus): Spec[Port] = newSpec {
-  assert(nibble.length == 4, "A nibble must be 4 bits")
-  and(nibble(3), or(nibble(2), nibble(1)))
+/** The high-nibble adjustment for [[daa]] and [[das]]: set iff CF is set, or the high nibble exceeds 9, or AF is clear
+  * and the high nibble is 9 with the low nibble exceeding 9. AL > 0x9F is a high nibble above 9, and AL > 0x99 adds the
+  * case of a high nibble of 9 with a low nibble above 9.
+  */
+private def decimalHighAdj(al: Bus, af: Port, cf: Port): Spec[Port] = newSpec {
+  val high = al.drop(4)
+  orM(cf, nibbleGt9(high), andM(not(af), eqConst(high, 9), nibbleGt9(al.take(4))))
 }
 
 /** 8086 DAA (decimal adjust AL after addition).
@@ -22,9 +23,7 @@ private def nibbleGt9(nibble: Bus): Spec[Port] = newSpec {
   * is set, 6 is added to AL and AF is set, else AF is cleared; then, using the original AL, if it exceeds 0x9F (or 0x99
   * when AF is clear) or CF is set, 0x60 is added to AL and CF is set, else CF is cleared.
   *
-  * The threshold depends on AF because the low adjustment already happened when AF is set: values 0x9A..0x9F with AF
-  * set do not get the 0x60, where Intel's current pseudocode — which tests the adjusted AL against a fixed 0x99 — would
-  * add it. This is the 8088 behaviour, confirmed against SingleStepTests/8088 27.
+  * This is the 8088 behaviour; Intel's current pseudocode uses a fixed 0x99.
   *
   * Returns `(result, cf, af)`, in that order. SF, ZF and PF for the result follow from [[flagN]], [[flagZ]] and
   * [[flagP]] and are not returned here.
@@ -34,10 +33,7 @@ def daa(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
   val lowAdj = or(nibbleGt9(al.take(4)), af)
   val (alPlus6, _, _) = rippleAdder(al, const(8, 6), Low)
   val alLow = mux2(al, alPlus6, lowAdj)
-  // The high test uses the original AL: AL > 0x99 iff AL >= 0x9A, AL > 0x9F iff AL >= 0xA0.
-  val (_, below9A, _) = compare(al, const(8, 0x9a))
-  val (_, belowA0, _) = compare(al, const(8, 0xa0))
-  val highAdj = or(cf, or(and(af, not(belowA0)), and(not(af), not(below9A))))
+  val highAdj = decimalHighAdj(al, af, cf)
   val (alPlus60, _, _) = rippleAdder(alLow, const(8, 0x60), Low)
   (mux2(alLow, alPlus60, highAdj), highAdj, lowAdj)
 }
@@ -55,10 +51,7 @@ def das(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
   val lowAdj = or(nibbleGt9(al.take(4)), af)
   val (alMinus6, _, _) = subtractor(al, const(8, 6))
   val alLow = mux2(al, alMinus6, lowAdj)
-  // The high test uses the original AL: AL > 0x99 iff AL >= 0x9A, AL > 0x9F iff AL >= 0xA0.
-  val (_, below9A, _) = compare(al, const(8, 0x9a))
-  val (_, belowA0, _) = compare(al, const(8, 0xa0))
-  val highAdj = or(cf, or(and(af, not(belowA0)), and(not(af), not(below9A))))
+  val highAdj = decimalHighAdj(al, af, cf)
   val (alMinus60, _, _) = subtractor(alLow, const(8, 0x60))
   (mux2(alLow, alMinus60, highAdj), highAdj, lowAdj)
 }

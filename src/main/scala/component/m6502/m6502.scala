@@ -11,12 +11,6 @@ import core.*
 // from the decimal result and therefore differs; see the scaladoc on
 // [[decimalAdc]] for the exact NMOS rules.
 
-/** A nibble is greater than 9 iff its top bit is set and either of the next two bits is set (values 10..15). */
-private def nibbleGt9(nibble: Bus): Spec[Port] = newSpec {
-  assert(nibble.length == 4, "A nibble must be 4 bits")
-  and(nibble(3), or(nibble(2), nibble(1)))
-}
-
 /** Arithmetic shift left by one (6502 ASL).
   *
   * Returns `(result, cout)`: `result` is `a` shifted left with Low shifted in, and `cout` is the bit shifted out (`a`'s
@@ -115,14 +109,12 @@ def decimalAdc(a: Bus, b: Bus, cin: Port): Spec[(Bus, Port, Port, Port, Port)] =
   */
 def decimalSbc(a: Bus, b: Bus, cin: Port): Spec[(Bus, Port, Port, Port, Port)] = newSpec {
   assert(a.length == 8 && b.length == 8, "Decimal SBC operands must be 8 bits")
-  // Low nibble: the same subtraction on the nibbles, with the same carry in.
+  // Low nibble: `a - b` with the incoming carry.
   val (lowDiff, lowCout, _) = rippleAdder(a.take(4), b.take(4).map(not), cin)
   val lowBorrow = not(lowCout)
   val (lowDiffMinus6, _, _) = subtractor(lowDiff, const(4, 6))
   val lowRes = mux2(lowDiff, lowDiffMinus6, lowBorrow)
-  // High nibble: the borrow out of the low nibble is the borrow in here, i.e. the carry in is lowCout. The two nibble
-  // adders already form the full binary subtraction chain, so its difference is `lowDiff ++ highDiff`, its carry out
-  // is `highCout`, and its overflow is the high adder's overflow.
+  // High nibble: the borrow out of the low nibble is the borrow in here, i.e. the carry in is lowCout.
   val (highDiff, highCout, highOverflow) = rippleAdder(a.drop(4), b.drop(4).map(not), lowCout)
   val highBorrow = not(highCout)
   val (highDiffMinus6, _, _) = subtractor(highDiff, const(4, 6))
