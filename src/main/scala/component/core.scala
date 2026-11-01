@@ -14,10 +14,12 @@ def nand(in1: Port, in2: Port): Spec[Port] = newSpec {
 }
 
 /** A clock signal (https://en.wikipedia.org/wiki/Clock_signal).
+  *
+  * Toggles every `halfPeriod` ticks, starting at `initialLevel` at t=0.
   */
-def clock(freq: Int): Spec[Port] = newSpec {
+def clock(halfPeriod: Int, initialLevel: Boolean = true): Spec[Port] = newSpec {
   val out = new Port()
-  summon[BuilderEnv].add("impl", Clock(freq, out))
+  summon[BuilderEnv].add("impl", Clock(halfPeriod, out, initialLevel))
   out
 }
 
