@@ -210,7 +210,7 @@ case class ComponentCreator(design: Design) {
         if (cell.hideName == 1) create(m, inPorts)
         else {
           val outerEnv = summon[BuilderEnv]
-          val innerSpec: Spec[Map[String, Port | Bus]] = create(m, inPorts)
+          val innerSpec: Spec[Map[String, Port | Ports]] = create(m, inPorts)
           val (subOut, subComp) = buildComponent(Some(compName), innerSpec)
           outerEnv.add(compName, subComp)
           subOut

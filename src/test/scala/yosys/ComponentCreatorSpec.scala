@@ -36,7 +36,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
       b: Port,
       selA: Port,
       selB: Port,
-      bus: Bus
+      bus: Ports
   ): Spec[Port] = {
     val outs = cc.create(
       "tristate",
@@ -132,7 +132,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
   "A Verilog-generated tri-state bus with an inout port" should {
     "resolve the 2-driver shared bus through the wire group" in {
       val a, b, selA, selB = new Port()
-      val bus: Bus = Vector(new Port())
+      val bus: Ports = Vector(new Port())
       val (y, comp) = buildComponent {
         tristateY(tristateCreatorFromHdl, a, b, selA, selB, bus)
       }
@@ -152,7 +152,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
 
     "connect the inout port bidirectionally" in {
       val a, b, selA, selB = new Port()
-      val bus: Bus = Vector(new Port())
+      val bus: Ports = Vector(new Port())
       val (y, comp) = buildComponent {
         tristateY(tristateCreatorFromHdl, a, b, selA, selB, bus)
       }
@@ -170,7 +170,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
     }
 
     "register the inout port with Direction.Inout" in {
-      val bus: Bus = Vector(new Port())
+      val bus: Ports = Vector(new Port())
       val (_, comp) = buildComponent {
         tristateY(tristateCreatorFromHdl, new Port(), new Port(), new Port(), new Port(), bus)
       }
@@ -181,7 +181,7 @@ class ComponentCreatorSpec extends BaseSpec with SequentialScenarios {
     }
 
     "keep RTL netnames on the built component" in {
-      val bus: Bus = Vector(new Port())
+      val bus: Ports = Vector(new Port())
       val (_, comp) = buildComponent {
         tristateY(tristateCreatorFromHdl, new Port(), new Port(), new Port(), new Port(), bus)
       }
