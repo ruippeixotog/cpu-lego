@@ -64,11 +64,52 @@ class BusWidthSpec extends BaseSpec {
       typeChecks("val x: Bus[4] = Bus(w, w)") must beFalse
     }
 
+    "accept indices it can prove in range" in {
+      typeChecks("a(0); a(7)") must beTrue
+      typeChecks("val x: 8 = a.length") must beTrue
+      typeChecks("a.mapWithIndex((_, i) => b(i))") must beTrue
+      typeChecks("Bus.tabulate(8)(i => a(i))") must beTrue
+      typeChecks("a.indices.map(i => a(i))") must beTrue
+      typeChecks("def f[N <: Int](x: Bus[N], y: Bus[N]) = x.mapWithIndex((_, i) => y(i))") must beTrue
+      typeChecks("def f(i: Int) = a.get(i)") must beTrue
+    }
+
+    "reject indices it can't prove in range" in {
+      typeChecks("a(8)") must beFalse
+      typeChecks("a(-1)") must beFalse
+      typeChecks("def f(i: Int) = a(i)") must beFalse
+      typeChecks("a.mapWithIndex((_, i) => a(i - 1))") must beFalse
+      typeChecks("a.mapWithIndex((_, i) => nib(i))") must beFalse
+      typeChecks("Bus.tabulate(8)(i => nib(i))") must beFalse
+      typeChecks("def f[N <: Int](x: Bus[N]) = x(0)") must beFalse
+    }
+
+    "check indices at runtime when the width is not constant" in {
+      val x = Bus.dynamic(Vector.fill(3)(new Port))
+      x(2) must not(beNull)
+      x(3) must throwAn[IndexOutOfBoundsException]
+      a.get(8) must throwAn[IndexOutOfBoundsException]
+    }
+
+    "move bits with shifts and rotates" in {
+      val ps = Bus.tabulate(4)(_ => new Port)
+      val Vector(p0, p1, p2, p3) = ps.ports
+      ps.shiftUp(1, High).ports must beEqualTo(Vector(High, p0, p1, p2))
+      ps.shiftUp(9, High).ports must beEqualTo(Vector(High, High, High, High))
+      ps.shiftDown(1, High).ports must beEqualTo(Vector(p1, p2, p3, High))
+      ps.shiftDown(9, High).ports must beEqualTo(Vector(High, High, High, High))
+      ps.rotateUp(1).ports must beEqualTo(Vector(p3, p0, p1, p2))
+      ps.rotateUp(5).ports must beEqualTo(Vector(p3, p0, p1, p2))
+      ps.rotateDown(1).ports must beEqualTo(Vector(p1, p2, p3, p0))
+      ps.rotateDown(5).ports must beEqualTo(Vector(p1, p2, p3, p0))
+      Bus.dynamic(Vector()).rotateUp(1).ports must beEmpty
+    }
+
     "run combinators from the LSB up" in {
       val ps = Bus.tabulate(4)(_ => new Port)
       ps.chain(High)((_, p) => p) must beEqualTo(ps)
       ps.mapAccum(0)((s, p) => (p, s + 1)) must beEqualTo((ps, 4))
-      ps.mapWithIndex((_, i) => ps(3 - i)).ports must beEqualTo(ps.ports.reverse)
+      ps.mapWithIndex((_, i) => ps.get(3 - i)).ports must beEqualTo(ps.ports.reverse)
       ps.scanRight1((p, _) => p) must beEqualTo(ps)
       ps.grouped(2).map(_.ports) must beEqualTo(ps.ports.grouped(2).toVector)
       ps.grouped(3) must throwAn[AssertionError]

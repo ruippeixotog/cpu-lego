@@ -55,7 +55,7 @@ abstract class BaseSpec extends Specification with ScalaCheck {
 
   def checkBus(
       sim: GateProcessor,
-      got: Bus,
+      got: Ports,
       expected: Int,
       label: String,
       bad: ListBuffer[String]

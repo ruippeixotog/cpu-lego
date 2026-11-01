@@ -160,8 +160,7 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus[n.type]] = newSpec {
       else dLatchWithPhases(d, clkM, clkS, clear = clear)
     q
   }
-  qs.last ~> ds(0)
-  for (i <- 1 until n) qs(i - 1) ~> ds(i)
+  qs.rotateUp(1) ~> ds
   qs
 }
 

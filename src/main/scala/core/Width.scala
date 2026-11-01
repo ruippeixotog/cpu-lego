@@ -26,28 +26,38 @@ object Width {
   @implicitNotFound("Bus width out of range: ${A} is greater than ${B}")
   sealed trait Le[A <: Int, B <: Int]
 
-  private type BothConst[A, B] = IsConst[A] && IsConst[B]
+  /** `0 <= A < B`. */
+  @implicitNotFound("Bit ${A} is not provably within a ${B}-bit bus: use a Bus.Index for it, or `get` if computed")
+  sealed trait Lt[A <: Int, B <: Int]
 
-  private object Proof extends Eq[Int, Int] with Le[Int, Int]
+  private type InRange[A <: Int, B <: Int] = (0 <= A) && (A < B)
 
-  sealed trait EqLow {
-    given deferred[A <: Int, B <: Int](using BothConst[A, B] =:= false): Eq[A, B] = Proof.asInstanceOf[Eq[A, B]]
+  private object Proof extends Eq[Int, Int] with Le[Int, Int] with Lt[Int, Int]
+
+  sealed trait EqDeferredB {
+    given deferredB[A <: Int, B <: Int](using IsConst[B] =:= false): Eq[A, B] = Proof.asInstanceOf[Eq[A, B]]
   }
-  sealed trait EqDyn extends EqLow {
-    given dynamic[B <: Int]: Eq[Int, B] = Proof.asInstanceOf[Eq[Int, B]]
+  sealed trait EqDeferredA extends EqDeferredB {
+    given deferredA[A <: Int, B <: Int](using IsConst[A] =:= false): Eq[A, B] = Proof.asInstanceOf[Eq[A, B]]
   }
-  object Eq extends EqDyn {
+  object Eq extends EqDeferredA {
     given proven[A <: Int, B <: Int](using A =:= B): Eq[A, B] = Proof.asInstanceOf[Eq[A, B]]
   }
 
-  sealed trait LeLow {
-    given deferred[A <: Int, B <: Int](using BothConst[A, B] =:= false): Le[A, B] = Proof.asInstanceOf[Le[A, B]]
+  sealed trait LeDeferredB {
+    given deferredB[A <: Int, B <: Int](using IsConst[B] =:= false): Le[A, B] = Proof.asInstanceOf[Le[A, B]]
   }
-  sealed trait LeDyn extends LeLow {
-    given dynamicL[B <: Int]: Le[Int, B] = Proof.asInstanceOf[Le[Int, B]]
-    given dynamicR[A <: Int]: Le[A, Int] = Proof.asInstanceOf[Le[A, Int]]
+  sealed trait LeDeferredA extends LeDeferredB {
+    given deferredA[A <: Int, B <: Int](using IsConst[A] =:= false): Le[A, B] = Proof.asInstanceOf[Le[A, B]]
   }
-  object Le extends LeDyn {
+  object Le extends LeDeferredA {
     given proven[A <: Int, B <: Int](using (A <= B) =:= true): Le[A, B] = Proof.asInstanceOf[Le[A, B]]
+  }
+
+  sealed trait LtDeferred {
+    given deferred[A <: Int, B <: Int](using IsConst[B] =:= false): Lt[A, B] = Proof.asInstanceOf[Lt[A, B]]
+  }
+  object Lt extends LtDeferred {
+    given proven[A <: Int, B <: Int](using InRange[A, B] =:= true): Lt[A, B] = Proof.asInstanceOf[Lt[A, B]]
   }
 }

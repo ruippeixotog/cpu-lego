@@ -54,7 +54,7 @@ class M6502Spec extends BaseSpec {
 
   private def checkDecimal(
       sim: GateProcessor,
-      outs: (Bus, Port, Port, Port, Port),
+      outs: (Bus[8], Port, Port, Port, Port),
       expected: (Int, Boolean, Boolean, Boolean, Boolean),
       label: String,
       bad: ListBuffer[String]
@@ -127,8 +127,8 @@ class M6502Spec extends BaseSpec {
 
   "A decimalAdc" should {
     "match the published NMOS vectors" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalAdc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -141,8 +141,8 @@ class M6502Spec extends BaseSpec {
     }
 
     "match SingleStepTests 65x02 hardware vectors" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalAdc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -155,8 +155,8 @@ class M6502Spec extends BaseSpec {
     }
 
     "match the reference model on all 8-bit operand pairs and carry-ins" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalAdc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -173,8 +173,8 @@ class M6502Spec extends BaseSpec {
 
   "A decimalSbc" should {
     "match the published NMOS vectors" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalSbc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -187,8 +187,8 @@ class M6502Spec extends BaseSpec {
     }
 
     "match SingleStepTests 65x02 hardware vectors" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalSbc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -201,8 +201,8 @@ class M6502Spec extends BaseSpec {
     }
 
     "match the reference model on all 8-bit operand pairs and carry-ins" in {
-      val aIns = Vector.fill(8)(new Port)
-      val bIns = Vector.fill(8)(new Port)
+      val aIns = Bus.fill(8)(new Port)
+      val bIns = Bus.fill(8)(new Port)
       val cin = new Port
       val (outs, comp) = buildComponent { decimalSbc(aIns, bIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -220,7 +220,7 @@ class M6502Spec extends BaseSpec {
   "An asl" should {
     "shift left by one, carrying out the top bit, for all 8-bit values" in {
       val n = 8
-      val aIns = Vector.fill(n)(new Port)
+      val aIns = Bus.fill(8)(new Port)
       val ((result, cout), comp) = buildComponent { asl(aIns) }
       var sim = GateProcessor.setup(comp)
       val bad = ListBuffer.empty[String]
@@ -236,7 +236,7 @@ class M6502Spec extends BaseSpec {
   "An lsr" should {
     "shift right by one, carrying out the bottom bit, for all 8-bit values" in {
       val n = 8
-      val aIns = Vector.fill(n)(new Port)
+      val aIns = Bus.fill(8)(new Port)
       val ((result, cout), comp) = buildComponent { lsr(aIns) }
       var sim = GateProcessor.setup(comp)
       val bad = ListBuffer.empty[String]
@@ -252,7 +252,7 @@ class M6502Spec extends BaseSpec {
   "A rol" should {
     "rotate left through carry for all 8-bit values and carry-ins" in {
       val n = 8
-      val aIns = Vector.fill(n)(new Port)
+      val aIns = Bus.fill(8)(new Port)
       val cin = new Port
       val ((result, cout), comp) = buildComponent { rol(aIns, cin) }
       var sim = GateProcessor.setup(comp)
@@ -270,7 +270,7 @@ class M6502Spec extends BaseSpec {
   "A ror" should {
     "rotate right through carry for all 8-bit values and carry-ins" in {
       val n = 8
-      val aIns = Vector.fill(n)(new Port)
+      val aIns = Bus.fill(8)(new Port)
       val cin = new Port
       val ((result, cout), comp) = buildComponent { ror(aIns, cin) }
       var sim = GateProcessor.setup(comp)

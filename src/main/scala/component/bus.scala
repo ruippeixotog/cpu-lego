@@ -23,7 +23,7 @@ def const(width: Int, value: Long): Bus[width.type] = {
   */
 def zeroExtend[N <: Int](bus: Bus[N], width: Int)(using Width.Le[N, width.type]): Bus[width.type] = {
   assert(width >= bus.length, s"zeroExtend target width $width is smaller than bus width ${bus.length}")
-  Bus.tabulate(width)(i => if (i < bus.length) bus(i) else Low)
+  Bus.tabulate(width)(i => if (i < bus.length) bus.get(i) else Low)
 }
 
 /** Pads `bus` with copies of its most significant bit up to `width` bits.
@@ -31,7 +31,7 @@ def zeroExtend[N <: Int](bus: Bus[N], width: Int)(using Width.Le[N, width.type])
 def signExtend[N <: Int](bus: Bus[N], width: Int)(using Width.Le[N, width.type]): Bus[width.type] = {
   assert(!bus.isEmpty, "signExtend needs a non-empty bus to take the sign bit from")
   assert(width >= bus.length, s"signExtend target width $width is smaller than bus width ${bus.length}")
-  Bus.tabulate(width)(i => if (i < bus.length) bus(i) else bus.last)
+  Bus.tabulate(width)(i => if (i < bus.length) bus.get(i) else bus.last)
 }
 
 /** Bitwise NOT of every bit. */
@@ -137,13 +137,14 @@ def oneHotMux[W <: Int, K <: Int](words: Seq[Bus[W]], selects: Bus[K]): Spec[Bus
 def priorityEncoder[N <: Int](bus: Bus[N]): Spec[(Bus[Width.CLog2[N]], Port)] = newSpec {
   assert(!bus.isEmpty, "Priority encoder needs at least one input")
   val anyFrom = bus.scanRight1(or) // anyFrom(i) = OR of bus(i) and above
+  val anyAbove = anyFrom.shiftDown(1, Low)
   val selected = bus.mapWithIndex { (b, i) =>
     if (i == bus.length - 1) b
-    else and(b, not(anyFrom(i + 1)))
+    else and(b, not(anyAbove(i)))
   }
   val outWidth = Width.clog2(bus.length)
   val out = (0 until outWidth).map { k =>
     orM(selected.zipWithIndex.collect { case (s, i) if ((i >> k) & 1) == 1 => s }*)
   }.toVector
-  (Bus.sized[Width.CLog2[N]](outWidth)(out), anyFrom(0))
+  (Bus.sized[Width.CLog2[N]](outWidth)(out), anyFrom.head)
 }

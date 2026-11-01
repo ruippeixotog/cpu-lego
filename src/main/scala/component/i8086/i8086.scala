@@ -12,7 +12,7 @@ import core.*
   * and the high nibble is 9 with the low nibble exceeding 9. AL > 0x9F is a high nibble above 9, and AL > 0x99 adds the
   * case of a high nibble of 9 with a low nibble above 9.
   */
-private def decimalHighAdj(al: Bus, af: Port, cf: Port): Spec[Port] = newSpec {
+private def decimalHighAdj(al: Bus[8], af: Port, cf: Port): Spec[Port] = newSpec {
   val high = al.drop(4)
   orM(cf, nibbleGt9(high), andM(not(af), eqConst(high, 9), nibbleGt9(al.take(4))))
 }
@@ -28,8 +28,7 @@ private def decimalHighAdj(al: Bus, af: Port, cf: Port): Spec[Port] = newSpec {
   * Returns `(result, cf, af)`, in that order. SF, ZF and PF for the result follow from [[flagN]], [[flagZ]] and
   * [[flagP]] and are not returned here.
   */
-def daa(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
-  assert(al.length == 8, "DAA operates on an 8-bit AL")
+def daa(al: Bus[8], af: Port, cf: Port): Spec[(Bus[8], Port, Port)] = newSpec {
   val lowAdj = or(nibbleGt9(al.take(4)), af)
   val (alPlus6, _, _) = rippleAdder(al, const(8, 6), Low)
   val alLow = mux2(al, alPlus6, lowAdj)
@@ -46,8 +45,7 @@ def daa(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
   *
   * Returns `(result, cf, af)`, in that order.
   */
-def das(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
-  assert(al.length == 8, "DAS operates on an 8-bit AL")
+def das(al: Bus[8], af: Port, cf: Port): Spec[(Bus[8], Port, Port)] = newSpec {
   val lowAdj = or(nibbleGt9(al.take(4)), af)
   val (alMinus6, _, _) = subtractor(al, const(8, 6))
   val alLow = mux2(al, alMinus6, lowAdj)
@@ -64,13 +62,12 @@ def das(al: Bus, af: Port, cf: Port): Spec[(Bus, Port, Port)] = newSpec {
   *
   * Returns `(al, ah, af, cf)`, in that order.
   */
-def aaa(al: Bus, ah: Bus, af: Port): Spec[(Bus, Bus, Port, Port)] = newSpec {
-  assert(al.length == 8 && ah.length == 8, "AAA operates on 8-bit AL and AH")
+def aaa(al: Bus[8], ah: Bus[8], af: Port): Spec[(Bus[8], Bus[8], Port, Port)] = newSpec {
   val adj = or(nibbleGt9(al.take(4)), af)
   val (alPlus6, _, _) = rippleAdder(al, const(8, 6), Low)
   val alAdj = mux2(al, alPlus6, adj)
   val (ahPlus1, _) = incrementer(ah, adj)
-  (alAdj.take(4) ++ Vector.fill(4)(Low), ahPlus1, adj, adj)
+  (alAdj.take(4) ++ Bus.fill(4)(Low), ahPlus1, adj, adj)
 }
 
 /** 8086 AAS (ASCII adjust AL after subtraction).
@@ -81,11 +78,10 @@ def aaa(al: Bus, ah: Bus, af: Port): Spec[(Bus, Bus, Port, Port)] = newSpec {
   *
   * Returns `(al, ah, af, cf)`, in that order.
   */
-def aas(al: Bus, ah: Bus, af: Port): Spec[(Bus, Bus, Port, Port)] = newSpec {
-  assert(al.length == 8 && ah.length == 8, "AAS operates on 8-bit AL and AH")
+def aas(al: Bus[8], ah: Bus[8], af: Port): Spec[(Bus[8], Bus[8], Port, Port)] = newSpec {
   val adj = or(nibbleGt9(al.take(4)), af)
   val (alMinus6, _, _) = subtractor(al, const(8, 6))
   val alAdj = mux2(al, alMinus6, adj)
   val (ahMinus1, _) = decrementer(ah, adj)
-  (alAdj.take(4) ++ Vector.fill(4)(Low), ahMinus1, adj, adj)
+  (alAdj.take(4) ++ Bus.fill(4)(Low), ahMinus1, adj, adj)
 }

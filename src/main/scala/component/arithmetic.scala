@@ -65,15 +65,17 @@ def prefixAdder[N <: Int](a: Bus[N], b: Bus[N], cin: Port = Low): Spec[(Bus[N], 
     // After the stages, bit i of (gs, ps) holds (G[i:0], P[i:0]).
     val (gs, ps) = (0 until stages).foldLeft((g0, p0)) { case ((g, p), k) =>
       val d = 1 << k
-      val nextG = g.mapWithIndex { (gi, i) => if (i < d) gi else or(gi, and(p(i), g(i - d))) }
-      val nextP = p.mapWithIndex { (pi, i) => if (i < d) pi else and(pi, p(i - d)) }
+      val (gl, pl) = (g.shiftUp(d, Low), p.shiftUp(d, Low))
+      val nextG = g.mapWithIndex { (gi, i) => if (i < d) gi else or(gi, and(p(i), gl(i))) }
+      val nextP = p.mapWithIndex { (pi, i) => if (i < d) pi else and(pi, pl(i)) }
       (nextG, nextP)
     }
     // carries(i) is the carry into bit i.
-    val carries = a.mapWithIndex { (_, i) => if (i == 0) cin else or(gs(i - 1), and(ps(i - 1), cin)) }
+    val (gsBelow, psBelow) = (gs.shiftUp(1, Low), ps.shiftUp(1, Low))
+    val carries = a.mapWithIndex { (_, i) => if (i == 0) cin else or(gsBelow(i), and(psBelow(i), cin)) }
     val sum = p0.zipMap(carries)(xor)
-    val cout = or(gs(n - 1), and(ps(n - 1), cin))
-    val overflow = xor(carries(n - 1), cout)
+    val cout = or(gs.last, and(ps.last, cin))
+    val overflow = xor(carries.last, cout)
     (sum, cout, overflow)
   }
 }
@@ -124,7 +126,6 @@ def compare[N <: Int](a: Bus[N], b: Bus[N]): Spec[(Port, Port, Port)] = newSpec 
 }
 
 /** A nibble is greater than 9 iff its top bit is set and either of the next two bits is set (values 10..15). */
-def nibbleGt9(nibble: Bus): Spec[Port] = newSpec {
-  assert(nibble.length == 4, "A nibble must be 4 bits")
+def nibbleGt9(nibble: Bus[4]): Spec[Port] = newSpec {
   and(nibble(3), or(nibble(2), nibble(1)))
 }

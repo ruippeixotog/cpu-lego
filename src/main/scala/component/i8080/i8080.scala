@@ -11,7 +11,7 @@ case class Input(d: Bus[8], ready: Port, hold: Port, int: Port, reset: Port, clk
 case class Output(a: Bus[16], sync: Port, dbin: Port, wait0: Port, wr: Port, hlda: Port, inte: Port)
 
 case class ControlBus(con: Bus[12]) {
-  def apply(b: ControlBus.Bit) = con(b.ordinal)
+  def apply(b: ControlBus.Bit) = con.get(b.ordinal)
 }
 
 object ControlBus {

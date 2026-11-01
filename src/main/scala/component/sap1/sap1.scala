@@ -10,7 +10,7 @@ import ControlBus.Bit.*
 case class Input(prog: Port, write: Port, addr: Bus[4], data: Bus[8])
 
 case class ControlBus(con: Bus[12]) {
-  def apply(b: ControlBus.Bit) = con(b.ordinal)
+  def apply(b: ControlBus.Bit) = con.get(b.ordinal)
 }
 
 object ControlBus {

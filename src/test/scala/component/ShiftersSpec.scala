@@ -13,7 +13,7 @@ import util.Implicits.*
 class ShiftersSpec extends BaseSpec {
 
   private def checkBarrel(
-      op: (Bus, Bus) => Spec[(Bus, Port)],
+      op: (Bus[Int], Bus[Int]) => Spec[(Bus[Int], Port)],
       ref: (Int, Int, Int) => (Int, Boolean),
       n: Int,
       amountBits: Int
@@ -106,7 +106,7 @@ class ShiftersSpec extends BaseSpec {
       val n = 16
       val aIns = Vector.fill(n)(new Port)
       val amountIns = Vector.fill(5)(new Port)
-      val ops: Seq[(String, (Bus, Bus) => Spec[(Bus, Port)], (Int, Int, Int) => (Int, Boolean))] = Seq(
+      val ops: Seq[(String, (Bus[Int], Bus[Int]) => Spec[(Bus[Int], Port)], (Int, Int, Int) => (Int, Boolean))] = Seq(
         ("shl", barrelShiftLeft, shiftLeftRef),
         ("shr", barrelShiftRight, shiftRightRef),
         ("sar", barrelShiftRightArithmetic, shiftRightArithmeticRef),
@@ -139,7 +139,7 @@ class ShiftersSpec extends BaseSpec {
       val bad = ListBuffer.empty[String]
       var count = 0
       def check(
-          op: (Bus, Bus) => Spec[(Bus, Port)],
+          op: (Bus[Int], Bus[Int]) => Spec[(Bus[Int], Port)],
           vectors: Seq[(Int, Int, Int, Boolean)],
           amountBits: Int
       ): Unit = {

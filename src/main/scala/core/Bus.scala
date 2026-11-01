@@ -11,13 +11,27 @@ import scala.compiletime.ops.int.*
   * through the conversion to [[Ports]].
   */
 final class Bus[N <: Int] private (val ports: Ports) {
-  def length: Int = ports.length
-  def apply(i: Int): Port = ports(i)
+  def length: N = ports.length.asInstanceOf[N]
+
+  /** Bit `i`, for an index known to be in range: from [[mapWithIndex]], [[Bus.tabulate]] or [[indices]]. */
+  def apply(i: Bus.Index[N]): Port = ports(i)
+
+  /** Bit `i`, for a constant index proven in range at compile time. On a bus with no constant width, the index is
+    * checked at runtime.
+    */
+  def apply(i: Int)(using Width.Lt[i.type, N]): Port = ports(i)
+
+  /** Bit `i` for a computed index, such as `i - 1`, which the compiler can't prove in range. Throws if it is not. */
+  def get(i: Int): Port = ports(i)
+
+  def indices: Vector[Bus.Index[N]] = ports.indices.map(Bus.Index.unsafe[N]).toVector
+
   def isEmpty: Boolean = ports.isEmpty
 
   def map(f: Port => Port): Bus[N] = new Bus(ports.map(f))
 
-  def mapWithIndex(f: (Port, Int) => Port): Bus[N] = new Bus(ports.zipWithIndex.map(f.tupled))
+  def mapWithIndex(f: (Port, Bus.Index[N]) => Port): Bus[N] =
+    new Bus(ports.zipWithIndex.map((p, i) => f(p, Bus.Index.unsafe(i))))
 
   /** Maps the bits from the LSB up, threading a state through them. Returns the final state. */
   def mapAccum[S](init: S)(f: (S, Port) => (Port, S)): (Bus[N], S) = {
@@ -54,6 +68,20 @@ final class Bus[N <: Int] private (val ports: Ports) {
     }
     (new Bus(out), end)
   }
+
+  /** Moves every bit `k` positions towards the MSB, dropping the top bits and filling the low ones with `fill`. */
+  def shiftUp(k: Int, fill: Port): Bus[N] = reindexed(i => if (i < k) fill else ports(i - k))
+
+  /** Moves every bit `k` positions towards the LSB, dropping the low bits and filling the top ones with `fill`. */
+  def shiftDown(k: Int, fill: Port): Bus[N] = reindexed(i => if (i + k < ports.length) ports(i + k) else fill)
+
+  /** Rotates by `k` positions towards the MSB, modulo the width. */
+  def rotateUp(k: Int): Bus[N] = reindexed(i => ports(Math.floorMod(i - k, ports.length)))
+
+  /** Rotates by `k` positions towards the LSB, modulo the width. */
+  def rotateDown(k: Int): Bus[N] = reindexed(i => ports((i + k) % ports.length))
+
+  private def reindexed(f: Int => Port): Bus[N] = new Bus(Vector.tabulate(ports.length)(f))
 
   /** Concatenation: `this` is the low part of the result. */
   def ++[M <: Int](that: Bus[M]): Bus[N + M] = new Bus(ports ++ that.ports)
@@ -94,6 +122,14 @@ final class Bus[N <: Int] private (val ports: Ports) {
 }
 
 object Bus {
+
+  /** A bit position known to be below `N`. Arithmetic on it yields a plain `Int`. */
+  opaque type Index[N <: Int] <: Int = Int
+
+  private[core] object Index {
+    def unsafe[N <: Int](i: Int): Index[N] = i
+  }
+
   type Fill[N <: Int] <: Tuple = N match {
     case 0 => EmptyTuple
     case S[n] => Port *: Fill[n]
@@ -109,7 +145,8 @@ object Bus {
 
   def fill(width: Int)(p: => Port): Bus[width.type] = new Bus(Vector.fill(width)(p))
 
-  def tabulate(width: Int)(f: Int => Port): Bus[width.type] = new Bus(Vector.tabulate(width)(f))
+  def tabulate(width: Int)(f: Index[width.type] => Port): Bus[width.type] =
+    new Bus(Vector.tabulate(width)(i => f(Index.unsafe(i))))
 
   /** Runtime-checked entry point from raw ports, for widths that only exist at the boundary of the DSL. */
   def of(width: Int)(ports: Ports): Bus[width.type] = sized[width.type](width)(ports)
