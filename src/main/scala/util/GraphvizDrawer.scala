@@ -50,7 +50,7 @@ object GraphvizDrawer {
         case (Some(dir), port: Port) =>
           portMap.add(port, reverse(dir), cName)
           addPortNode(cName, name)
-        case (Some(dir), bus: Bus) =>
+        case (Some(dir), bus: Ports) =>
           builder.append("// Unsupported bus\n")
         case (None, portOrBus) =>
           builder.append(s"// No dir for ${portOrBus}\n")
@@ -105,7 +105,7 @@ object GraphvizDrawer {
             val ps = cc.namedPorts
               .flatMap {
                 case (name, (dir, port: Port)) => List((name, (dir, port)))
-                case (name, (dir, bus: Bus)) => bus.zipWithIndex.map { (port, i) => (s"$name[$i]", (dir, port)) }
+                case (name, (dir, bus: Ports)) => bus.zipWithIndex.map { (port, i) => (s"$name[$i]", (dir, port)) }
               }
               .zipWithIndex
               .flatMap {

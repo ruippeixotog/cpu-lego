@@ -187,7 +187,7 @@ object Netlist {
       case cc: CompositeComponent =>
         cc.namedPorts.foreach {
           case (name, (dir, p: Port)) => b.addPin(name, dir, p)
-          case (name, (dir, bus: Bus)) =>
+          case (name, (dir, bus: Ports)) =>
             bus.zipWithIndex.foreach { case (p, i) => b.addPin(s"$name[$i]", dir, p) }
         }
       case _ => // a bare primitive has no pins
@@ -207,7 +207,7 @@ object Netlist {
           val prefix = if (path.isEmpty) "" else path + "."
           cc.namedPorts.foreach {
             case (name, (_, p: Port)) => b.addName(p, prefix + name)
-            case (name, (_, bus: Bus)) =>
+            case (name, (_, bus: Ports)) =>
               bus.zipWithIndex.foreach { case (p, i) => b.addName(p, s"$prefix$name[$i]") }
           }
           cc.wires.foreach { case (a, c) => b.addWire(a, c) }

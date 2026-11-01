@@ -122,7 +122,7 @@ def jkFlipFlop(j: Port, k: Port, clk: Port, clear: Port, preset: Port = High): S
 }
 
 /** A controlled buffer register (page 107). */
-def register(xs: Bus, load: Port, clk: Port, clear: Port = High): Spec[Bus] = newSpec {
+def register[N <: Int](xs: Bus[N], load: Port, clk: Port, clear: Port = High): Spec[Bus[N]] = newSpec {
   val notLoad = not(load)
   xs.map { x =>
     val aux = newPort()
@@ -134,23 +134,33 @@ def register(xs: Bus, load: Port, clk: Port, clear: Port = High): Spec[Bus] = ne
 
 /** A negative edge-triggered `n`-bit controlled counter (page 113).
   */
-def counter(n: Int, count: Port, clk: Port, clear: Port): Spec[Bus] = newSpec {
-  (1 to n).scanLeft(clk) { case (prev, _) => jkFlipFlop(count, count, not(prev), clear)._1 }.tail.toVector
+def counter(n: Int, count: Port, clk: Port, clear: Port): Spec[Bus[n.type]] = newSpec {
+  Bus.of(n)((1 to n).scanLeft(clk) { case (prev, _) => jkFlipFlop(count, count, not(prev), clear)._1 }.tail.toVector)
 }
 
 /** A negative edge-triggered presettable counter (page 119).
   */
-def presettableCounter(ps: Bus, load: Port, clk: Port, clear: Port): Spec[Bus] = newSpec {
-  ps.scanLeft(clk) { case (prev, p) =>
-    jkFlipFlop(High, High, not(prev), clear = and(clear, nand(load, not(p))), preset = or(not(clear), nand(load, p)))._1
-  }.tail
+def presettableCounter[N <: Int](ps: Bus[N], load: Port, clk: Port, clear: Port): Spec[Bus[N]] = newSpec {
+  Bus.sameAs(ps)(
+    ps.ports
+      .scanLeft(clk) { case (prev, p) =>
+        jkFlipFlop(
+          High,
+          High,
+          not(prev),
+          clear = and(clear, nand(load, not(p))),
+          preset = or(not(clear), nand(load, p))
+        )._1
+      }
+      .tail
+  )
 }
 
 /** A negative edge-triggered `n`-bit ring counter (page 116).
   *
   * `clear` presets stage 0 and clears the others, so the ring starts at 100…0.
   */
-def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
+def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus[n.type]] = newSpec {
   val clkBar = not(clk)
   val (clkM, clkS) = nonOverlapClock(clkBar)
   val ds = Vector.fill(n)(newPort())
@@ -162,7 +172,7 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
   }
   qs.last ~> ds(0)
   for (i <- 1 until n) qs(i - 1) ~> ds(i)
-  qs
+  Bus.of(n)(qs)
 }
 
 /** A static RAM with 2 ^ `addr.length` words of `ins.length` bits. The RAM is controlled and buffered, allowing read
@@ -173,8 +183,8 @@ def ringCounter(n: Int, clk: Port, clear: Port): Spec[Bus] = newSpec {
   * leave the cell oscillating instead of settling, which hangs the simulator rather than corrupting a word. (Changing
   * the address while write is enabled is a violation for a real SRAM too.)
   */
-def ram(ins: Bus, addr: Bus, we: Port, ce: Port): Spec[Bus] = newSpec {
-  val select = decoder(addr, High)
+def ram[W <: Int, A <: Int](ins: Bus[W], addr: Bus[A], we: Port, ce: Port): Spec[Bus[W]] = newSpec {
+  val select = decoder(addr, High).ports
   val outs = ins.map { in =>
     select.map { sel => and(sel, latchClocked(in, not(in), and(we, sel))._1) }.reduce(or)
   }
@@ -184,11 +194,11 @@ def ram(ins: Bus, addr: Bus, we: Port, ce: Port): Spec[Bus] = newSpec {
 /** A ROM with `data.length` words of `data(0).length` bits. The address bus size should be compatible with the number
   * of words in `data`.
   */
-def rom(data: Seq[Seq[Boolean]], addr: Bus): Spec[Bus] = newSpec {
+def rom[A <: Int](data: Seq[Seq[Boolean]], addr: Bus[A]): Spec[Bus[Int]] = newSpec {
   assert(data.length == 1 << addr.length, "Data and address bus sizes do not match")
 
-  val select = decoder(addr, High)
-  data.transpose.map { col =>
+  val select = decoder(addr, High).ports
+  Bus.dynamic(data.transpose.map { col =>
     select.zip(col).map { (sel, v) => and(sel, if (v) High else Low) }.reduce(or)
-  }.toVector
+  }.toVector)
 }

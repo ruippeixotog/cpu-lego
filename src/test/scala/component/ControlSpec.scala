@@ -21,7 +21,7 @@ class ControlSpec extends BaseSpec {
     "select a single output based on the combination of inputs" in {
       forAll { (ins: Vector[LogicLevel], enable: LogicLevel) =>
         val (outs, sim) = buildAndRun { decoder(ins, enable) }
-        outs must haveLength(1 << ins.length)
+        outs.ports must haveLength(1 << ins.length)
 
         val expectedIdx = ins.toInt
         foreach(outs.zipWithIndex) { (out, idx) =>
@@ -31,7 +31,7 @@ class ControlSpec extends BaseSpec {
     }
     "select a single output with an empty input bus" in forAll { (enable: LogicLevel) =>
       val (outs, sim) = buildAndRun { decoder(Vector(), enable) }
-      outs must haveLength(1)
+      outs.ports must haveLength(1)
       sim.get(outs.head) must beSome(enable.toBool)
     }
   }
@@ -49,7 +49,7 @@ class ControlSpec extends BaseSpec {
 
     "throw when the input bus size and the address size do not match" in {
       val ins, sel = newBus(3)
-      buildAndRun { mux(ins, sel) } must throwAn[AssertionError]
+      buildAndRun { mux(Bus.dynamic(ins.ports), sel) } must throwAn[AssertionError]
     }
 
     "act as a 1-to-1 multiplexer with an empty selection bus" in forAll { (in: LogicLevel) =>
@@ -73,7 +73,7 @@ class ControlSpec extends BaseSpec {
 
     "throw when the input bus size and the address size do not match" in {
       val ins, sel = newBus(3)
-      buildAndRun { muxN(ins, sel, 2) } must throwAn[AssertionError]
+      buildAndRun { muxN(Bus.dynamic(ins.ports), sel, 2) } must throwAn[AssertionError]
     }
   }
 }

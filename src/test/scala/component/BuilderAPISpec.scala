@@ -16,10 +16,10 @@ class BuilderAPISpec extends BaseSpec {
       Map(prefix -> c)
   }
 
-  def getPortsFlat(comp: Component, prefix: String = ""): Map[String, (Option[Direction], Port | Bus)] = comp match {
+  def getPortsFlat(comp: Component, prefix: String = ""): Map[String, (Option[Direction], Port | Ports)] = comp match {
     case cc: CompositeComponent =>
       cc.namedPorts.map { case (name, e) => (prefix + "." + name, e) } ++
-        cc.components.foldLeft(Map[String, (Option[Direction], Port | Bus)]()) { case (acc, (name, c)) =>
+        cc.components.foldLeft(Map[String, (Option[Direction], Port | Ports)]()) { case (acc, (name, c)) =>
           acc ++ getPortsFlat(c, prefix + "." + name)
         }
     case _ =>

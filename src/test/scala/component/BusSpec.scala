@@ -30,7 +30,7 @@ class BusSpec extends BaseSpec {
 
   /** Reads every simulated bit as a `Vector[Boolean]`, sidestepping the `List`/`Vector` mismatch of `Seq#sequence`.
     */
-  def simBools(out: Bus, sim: GateProcessor): Option[Vector[Boolean]] =
+  def simBools(out: Ports, sim: GateProcessor): Option[Vector[Boolean]] =
     sim.get(out).sequence.map(_.toVector)
 
   // --- constants and structure (pure helpers: no simulation needed) ---
@@ -39,7 +39,7 @@ class BusSpec extends BaseSpec {
     "encode every value exhaustively for width <= 4" in {
       foreach((0 to 4).toList) { width =>
         foreach((0 until (1 << width)).toList) { value =>
-          const(width, value) must beEqualTo(constBus(width, value))
+          const(width, value).ports must beEqualTo(constBus(width, value))
         }
       }
       ok
@@ -56,7 +56,7 @@ class BusSpec extends BaseSpec {
       foreach((0 to 4).toList) { width =>
         foreach((width to 4).toList) { target =>
           foreach(allBuses(width).toList) { in =>
-            zeroExtend(in, target) must beEqualTo(in ++ Vector.fill(target - width)(Low))
+            zeroExtend(in, target).ports must beEqualTo(in ++ Vector.fill(target - width)(Low))
           }
         }
       }
@@ -73,7 +73,7 @@ class BusSpec extends BaseSpec {
       foreach((1 to 4).toList) { width =>
         foreach((width to 4).toList) { target =>
           foreach(allBuses(width).toList) { in =>
-            signExtend(in, target) must beEqualTo(in ++ Vector.fill(target - width)(in.last))
+            signExtend(in, target).ports must beEqualTo(in ++ Vector.fill(target - width)(in.last))
           }
         }
       }
@@ -107,7 +107,7 @@ class BusSpec extends BaseSpec {
 
   "andB/orB/xorB on buses" should {
     "match the Scala reference exhaustively for width <= 4" in {
-      val ops = Seq[(String, (Bus, Bus) => Spec[Bus], (Boolean, Boolean) => Boolean)](
+      val ops = Seq[(String, (Bus[Int], Bus[Int]) => Spec[Bus[Int]], (Boolean, Boolean) => Boolean)](
         ("and", (a, b) => andB(a, b), (x, y) => x && y),
         ("or", (a, b) => orB(a, b), (x, y) => x || y),
         ("xor", (a, b) => xorB(a, b), (x, y) => x ^ y)
@@ -271,7 +271,7 @@ class BusSpec extends BaseSpec {
           foreach(allWordCombos(words, width).toList) { ws =>
             foreach((0 until words).toList) { s =>
               val sel = constBus(selWidth, s)
-              val (out, sim) = buildAndRun { muxWords(ws, sel) }
+              val (out, sim) = buildAndRun { muxWords(ws.map(Bus.dynamic(_)), sel) }
               simBools(out, sim) must beSome(bools(ws(s)))
             }
           }
@@ -284,7 +284,7 @@ class BusSpec extends BaseSpec {
       // full-width coverage beyond the tractable cartesian product above
       val ws = Vector(0xa, 0x5, 0xf, 0x0).map(constBus(4, _))
       foreach((0 until 4).toList) { s =>
-        val (out, sim) = buildAndRun { muxWords(ws, constBus(2, s)) }
+        val (out, sim) = buildAndRun { muxWords(ws.map(Bus.dynamic(_)), constBus(2, s)) }
         simBools(out, sim) must beSome(bools(ws(s)))
       }
       ok
@@ -294,7 +294,7 @@ class BusSpec extends BaseSpec {
       Gen.listOfN(4, genBus16).map(_.toVector),
       Gen.choose(0, 3)
     ) { (ws, s) =>
-      val (out, sim) = buildAndRun { muxWords(ws, constBus(2, s)) }
+      val (out, sim) = buildAndRun { muxWords(ws.map(Bus.dynamic(_)), constBus(2, s)) }
       simBools(out, sim) must beSome(bools(ws(s)))
     }
 
@@ -312,7 +312,7 @@ class BusSpec extends BaseSpec {
         foreach((0 to maxWidth).toList) { width =>
           foreach(allWordCombos(n, width).toList) { ws =>
             foreach(allBuses(n).toList) { sels =>
-              val (out, sim) = buildAndRun { oneHotMux(ws, sels) }
+              val (out, sim) = buildAndRun { oneHotMux(ws.map(Bus.dynamic(_)), sels) }
               val expected = (0 until width).map { i =>
                 ws.zip(sels).exists { case (w, s) => w(i).toBool && s.toBool }
               }.toVector
@@ -328,7 +328,7 @@ class BusSpec extends BaseSpec {
       Gen.listOfN(4, genBus16).map(_.toVector),
       Gen.listOfN(4, genLogicLevel).map(_.toVector)
     ) { (ws, sels) =>
-      val (out, sim) = buildAndRun { oneHotMux(ws, sels) }
+      val (out, sim) = buildAndRun { oneHotMux(ws.map(Bus.dynamic(_)), sels) }
       val expected = (0 until 16).map { i =>
         ws.zip(sels).exists { case (w, s) => w(i).toBool && s.toBool }
       }.toVector
@@ -349,7 +349,7 @@ class BusSpec extends BaseSpec {
           val expectedIdx = bs.lastIndexOf(true)
           sim.get(valid) must beSome(expectedIdx >= 0)
           val outWidth = 32 - Integer.numberOfLeadingZeros(width - 1)
-          out must haveLength(outWidth)
+          out.ports must haveLength(outWidth)
           simBools(out, sim) must beSome(math.max(expectedIdx, 0).toBoolVec(outWidth).toVector)
         }
       }
@@ -361,7 +361,7 @@ class BusSpec extends BaseSpec {
       val bs = bools(in)
       val expectedIdx = bs.lastIndexOf(true)
       sim.get(valid) must beSome(expectedIdx >= 0)
-      out must haveLength(4)
+      out.ports must haveLength(4)
       simBools(out, sim) must beSome(math.max(expectedIdx, 0).toBoolVec(4).toVector)
     }
 

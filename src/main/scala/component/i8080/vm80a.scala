@@ -15,17 +15,13 @@ case class VM80Input(
     f1: Port = new Port(),
     f2: Port = new Port(),
     reset: Port = new Port(),
-    d: Bus @inout = Vector.fill(8)(new Port()),
+    d: Bus[8] @inout = Bus.of(8)(Vector.fill(8)(new Port())),
     hold: Port = new Port(),
     ready: Port = new Port(),
     int: Port = new Port()
-) {
-  require(d.length == 8, s"VM80A data bus must be 8 bits, but got ${d.length}")
-}
+)
 
-case class VM80Output(a: Bus, hlda: Port, wait0: Port, inte: Port, sync: Port, dbin: Port, wr: Port) {
-  require(a.length == 16, s"VM80A address bus must be 16 bits, but got ${a.length}")
-}
+case class VM80Output(a: Bus[16], hlda: Port, wait0: Port, inte: Port, sync: Port, dbin: Port, wr: Port)
 
 val vm80aCreator = ComponentCreator.fromVerilog(Path.of("src/main/verilog/vm80a/org/rtl/vm80a.v"))
 
@@ -37,14 +33,14 @@ def vm80a(in: VM80Input): Spec[VM80Output] = {
       "pin_f1" -> in.f1,
       "pin_f2" -> in.f2,
       "pin_reset" -> in.reset,
-      "pin_d" -> in.d,
+      "pin_d" -> in.d.ports,
       "pin_hold" -> in.hold,
       "pin_ready" -> in.ready,
       "pin_int" -> in.int
     )
   )
   VM80Output(
-    a = out("pin_a").asInstanceOf[Bus],
+    a = Bus.of(16)(out("pin_a").asInstanceOf[Ports]),
     hlda = out("pin_hlda").asInstanceOf[Port],
     wait0 = out("pin_wait").asInstanceOf[Port],
     inte = out("pin_inte").asInstanceOf[Port],

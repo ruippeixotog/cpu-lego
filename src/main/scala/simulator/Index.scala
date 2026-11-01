@@ -2,7 +2,7 @@ package simulator
 
 import core.*
 
-case class Index(components: Map[String, Component], ports: Map[String, Port], buses: Map[String, Bus])
+case class Index(components: Map[String, Component], ports: Map[String, Port], buses: Map[String, Ports])
 
 object Index {
 
@@ -16,7 +16,7 @@ object Index {
 
         val (ports, buses) = comp.namedPorts.toList.map {
           case (name, (_, port: Port)) => (Some(prefix + name -> port), None)
-          case (name, (_, bus: Bus)) => (None, Some(prefix + name -> bus))
+          case (name, (_, bus: Ports)) => (None, Some(prefix + name -> bus))
         }.unzip
 
         val idx = Index(Map(path -> comp), ports.flatten.toMap, buses.flatten.toMap)

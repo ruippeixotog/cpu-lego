@@ -13,17 +13,18 @@ def fullAdder(in1: Port, in2: Port, in3: Port): Spec[(Port, Port)] = newSpec {
 
 /** A binary adder of `ins1.length` bits (page 82).
   */
-def binaryAdder(ins1: Bus, ins2: Bus, carryIn: Port = Low): Spec[(Bus, Port)] = newSpec {
-  val (outs, carry) = ins1.zip(ins2).foldLeft((List.empty[Port], carryIn)) { case ((prevOuts, prevCarry), (a, b)) =>
-    val (out, carry) = fullAdder(a, b, prevCarry)
-    (out :: prevOuts, carry)
-  }
-  (outs.reverse.toVector, carry)
+def binaryAdder[N <: Int](ins1: Bus[N], ins2: Bus[N], carryIn: Port = Low): Spec[(Bus[N], Port)] = newSpec {
+  val (outs, carry) =
+    ins1.ports.zip(ins2.ports).foldLeft((List.empty[Port], carryIn)) { case ((prevOuts, prevCarry), (a, b)) =>
+      val (out, carry) = fullAdder(a, b, prevCarry)
+      (out :: prevOuts, carry)
+    }
+  (Bus.sameAs(ins1)(outs.reverse.toVector), carry)
 }
 
 /** A 2's-complement adder-subtracter of `ins1.length` bits (page 86).
   */
-def addSub(ins1: Bus, ins2: Bus, sub: Port): Spec[Bus] = newSpec {
+def addSub[N <: Int](ins1: Bus[N], ins2: Bus[N], sub: Port): Spec[Bus[N]] = newSpec {
   binaryAdder(ins1, ins2.map(xor(_, sub)), sub)._1
 }
 
@@ -41,16 +42,17 @@ def addSub(ins1: Bus, ins2: Bus, sub: Port): Spec[Bus] = newSpec {
   * Returns `(sum, cout, overflow)`: `sum` is the `a.length`-bit result, `cout` the carry out of the most significant
   * bit, and `overflow` the signed overflow (carry into the MSB XOR `cout`).
   */
-def rippleAdder(a: Bus, b: Bus, cin: Port = Low): Spec[(Bus, Port, Port)] = newSpec {
+def rippleAdder[N <: Int](a: Bus[N], b: Bus[N], cin: Port = Low): Spec[(Bus[N], Port, Port)] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
   // chain is the carry chain reversed: head is the carry out, element (1) the carry into the MSB.
-  val (sumRev, chain) = a.zip(b).foldLeft((Vector.empty[Port], Vector(cin))) { case ((sums, carries), (x, y)) =>
-    val (s, c) = fullAdder(x, y, carries.head)
-    (s +: sums, c +: carries)
-  }
+  val (sumRev, chain) =
+    a.ports.zip(b.ports).foldLeft((Vector.empty[Port], Vector(cin))) { case ((sums, carries), (x, y)) =>
+      val (s, c) = fullAdder(x, y, carries.head)
+      (s +: sums, c +: carries)
+    }
   val cout = chain.head
   val overflow = if (a.isEmpty) Low else xor(chain(1), cout)
-  (sumRev.reverse.toVector, cout, overflow)
+  (Bus.sameAs(a)(sumRev.reverse.toVector), cout, overflow)
 }
 
 /** A Kogge–Stone parallel-prefix adder of `a.length` bits.
@@ -60,13 +62,13 @@ def rippleAdder(a: Bus, b: Bus, cin: Port = Low): Spec[(Bus, Port, Port)] = newS
   * `(G1, P1) ∘ (G2, P2) = (G1 | (P1 & G2), P1 & P2)` (higher group on the left) over `ceil(log2(n))` stages. The carry
   * into bit `i` is `G[i-1:0] | (P[i-1:0] & cin)`.
   */
-def prefixAdder(a: Bus, b: Bus, cin: Port = Low): Spec[(Bus, Port, Port)] = newSpec {
+def prefixAdder[N <: Int](a: Bus[N], b: Bus[N], cin: Port = Low): Spec[(Bus[N], Port, Port)] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
   val n = a.length
   if (n == 0) {
-    (Vector.empty[Port], cin, Low)
+    (a, cin, Low)
   } else {
-    val gp: Vector[(Port, Port)] = a.zip(b).map { case (x, y) => (and(x, y), xor(x, y)) }
+    val gp: Vector[(Port, Port)] = a.ports.zip(b.ports).map { case (x, y) => (and(x, y), xor(x, y)) }
     val stages = 32 - Integer.numberOfLeadingZeros(n - 1) // ceil(log2(n))
     // After the stages, cell i holds (G[i:0], P[i:0]).
     val prefix = (0 until stages).foldLeft(gp) { (cur, k) =>
@@ -84,7 +86,7 @@ def prefixAdder(a: Bus, b: Bus, cin: Port = Low): Spec[(Bus, Port, Port)] = newS
       val (g, p) = prefix(i)
       or(g, and(p, cin))
     }.toVector
-    val sum: Bus = gp.zip(carries).map { case ((_, p), c) => xor(p, c) }
+    val sum = Bus.sameAs(a)(gp.zip(carries).map { case ((_, p), c) => xor(p, c) })
     val (gn, pn) = prefix(n - 1)
     val cout = or(gn, and(pn, cin))
     val overflow = xor(carries(n - 1), cout)
@@ -96,9 +98,9 @@ def prefixAdder(a: Bus, b: Bus, cin: Port = Low): Spec[(Bus, Port, Port)] = newS
   *
   * Returns `(result, cout)`: `cout` is the carry out of the most significant bit.
   */
-def incrementer(a: Bus, inc: Port): Spec[(Bus, Port)] = newSpec {
+def incrementer[N <: Int](a: Bus[N], inc: Port): Spec[(Bus[N], Port)] = newSpec {
   // a + 0 + inc
-  val (sum, cout, _) = rippleAdder(a, Vector.fill(a.length)(Low), inc)
+  val (sum, cout, _) = rippleAdder(a, a.map(_ => Low), inc)
   (sum, cout)
 }
 
@@ -107,9 +109,9 @@ def incrementer(a: Bus, inc: Port): Spec[(Bus, Port)] = newSpec {
   * Returns `(result, cout)`: `cout` is the raw adder carry — when `dec` is High it is High iff no borrow was needed (`a
   * >= 1`); when `dec` is Low it is always Low.
   */
-def decrementer(a: Bus, dec: Port): Spec[(Bus, Port)] = newSpec {
+def decrementer[N <: Int](a: Bus[N], dec: Port): Spec[(Bus[N], Port)] = newSpec {
   // a + (dec ? 11..1 : 00..0) + 0 = a - (dec ? 1 : 0)
-  val (diff, cout, _) = rippleAdder(a, Vector.fill(a.length)(dec), Low)
+  val (diff, cout, _) = rippleAdder(a, a.map(_ => dec), Low)
   (diff, cout)
 }
 
@@ -118,7 +120,7 @@ def decrementer(a: Bus, dec: Port): Spec[(Bus, Port)] = newSpec {
   * Returns `(diff, cout, overflow)`: `cout` is High iff no borrow was needed (`a >= b` as unsigned); `overflow` is the
   * signed overflow of the subtraction.
   */
-def subtractor(a: Bus, b: Bus): Spec[(Bus, Port, Port)] = newSpec {
+def subtractor[N <: Int](a: Bus[N], b: Bus[N]): Spec[(Bus[N], Port, Port)] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
   rippleAdder(a, b.map(xor(_, High)), High)
 }
@@ -128,11 +130,11 @@ def subtractor(a: Bus, b: Bus): Spec[(Bus, Port, Port)] = newSpec {
   * Returns `(eq, ltUnsigned, ltSigned)`, following the flag conventions above: `ltSigned` is `overflow XOR diff.msb`,
   * i.e. the sign of `a - b` corrected for signed overflow.
   */
-def compare(a: Bus, b: Bus): Spec[(Port, Port, Port)] = newSpec {
+def compare[N <: Int](a: Bus[N], b: Bus[N]): Spec[(Port, Port, Port)] = newSpec {
   assert(a.length == b.length, "Buses must have the same width")
   val (diff, cout, overflow) = subtractor(a, b)
   val eq = not(orR(diff))
   val ltUnsigned = not(cout)
-  val ltSigned = if (a.isEmpty) Low else xor(overflow, diff.last)
+  val ltSigned = if (a.isEmpty) Low else xor(overflow, diff(diff.length - 1))
   (eq, ltUnsigned, ltSigned)
 }

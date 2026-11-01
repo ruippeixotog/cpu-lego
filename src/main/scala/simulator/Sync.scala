@@ -45,7 +45,7 @@ object Sync {
     awaitCondition(sim, Seq(port))(sim.get(port) == target)
 
   /** A Future completing once the bus's effective value equals `target`. */
-  def awaitBus(sim: Sim, bus: Bus, target: Vector[Option[Boolean]])(using ExecutionContext): Future[Unit] =
+  def awaitBus(sim: Sim, bus: Ports, target: Vector[Option[Boolean]])(using ExecutionContext): Future[Unit] =
     awaitCondition(sim, bus)(sim.get(bus) == target)
 
   /** A Future completing once `cond` — read from the sim's published state — holds. Watchers are installed on

@@ -14,7 +14,7 @@ object BuilderAPIMacros {
     override def toString = owner.fold("")(_ + ".") + name
   }
 
-  def newBus(n: Expr[Int])(using Quotes): Expr[Bus] =
+  def newBus(n: Expr[Int])(using Quotes): Expr[Ports] =
     BuilderAPIMacros().newBus(n)
 
   def newPort()(using Quotes): Expr[Port] =
@@ -27,7 +27,7 @@ object BuilderAPIMacros {
 class BuilderAPIMacros()(using qctx: Quotes) {
   import qctx.reflect._
 
-  def newBus(n: Expr[Int]): Expr[Bus] =
+  def newBus(n: Expr[Int]): Expr[Ports] =
     registerNewPort('{ Vector.tabulate($n)(idx => ${ newPort(Some('idx)) }) })
 
   def newPort(): Expr[Port] =
@@ -50,7 +50,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     val compName = Expr(macroOwner.name)
 
     def registerArgs(env: Expr[BuilderEnv]): Expr[Unit] = {
-      val exprs = macroOwner.paramSymss.flatten.map { sym =>
+      val exprs = macroOwner.paramSymss.flatten.filter(_.isTerm).map { sym =>
         val ValDef(name, ttree, _) = sym.tree: @unchecked
 
         ttree match {
@@ -106,8 +106,8 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     expr match {
       case '{ $port: Port } =>
         '{ $env.register(${ Expr(name) }, $port, $dir) }
-      case '{ $bus: Bus } =>
-        '{ $env.register(${ Expr(name) }, $bus, $dir) }
+      case '{ $bus: Bus[?] } =>
+        '{ $env.register(${ Expr(name) }, $bus.ports, $dir) }
       case '{ $p: Tuple } =>
         def registerTuple[B <: Tuple: Type](exprB: Expr[B], idx: Int): List[Expr[Unit]] = {
           exprB match {
@@ -134,7 +134,7 @@ class BuilderAPIMacros()(using qctx: Quotes) {
     }
   }
 
-  def registerNewPort[A <: Port | Bus: Type](portExpr: Expr[A]): Expr[A] = {
+  def registerNewPort[A <: Port | Ports: Type](portExpr: Expr[A]): Expr[A] = {
     val portName = Expr(macroOwner.name)
 
     Expr.summon[BuilderEnv] match {

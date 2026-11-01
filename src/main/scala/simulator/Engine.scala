@@ -12,7 +12,7 @@ trait EngineState {
   def get(port: Port): Option[Boolean]
 
   /** The effective value of every port of the bus. */
-  def get(bus: Bus): Vector[Option[Boolean]]
+  def get(bus: Ports): Vector[Option[Boolean]]
 }
 
 /** A deterministic, single-threaded discrete-event simulation engine.
@@ -25,13 +25,13 @@ trait Engine {
   def set(port: Port, value: Option[Boolean]): Unit
 
   /** Drive every port of the bus. */
-  def set(bus: Bus, values: Seq[Boolean]): Unit
+  def set(bus: Ports, values: Seq[Boolean]): Unit
 
   /** The port's effective value: the last driven value, else its wire-group value, else None. */
   def get(port: Port): Option[Boolean]
 
   /** The effective value of every port of the bus. */
-  def get(bus: Bus): Vector[Option[Boolean]]
+  def get(bus: Ports): Vector[Option[Boolean]]
 
   /** Advance the simulation to `deadline`, processing every event batch with timestamp <= `deadline`. */
   def runTo(deadline: Long): Unit

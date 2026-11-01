@@ -132,7 +132,7 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000, onFault: Fau
   /** Drive every port of the bus. All drives share one offer time and are applied together by the simulation thread at
     * the corresponding sim tick when the inbox is next drained.
     */
-  def set(bus: Bus, values: Seq[Boolean]): Unit =
+  def set(bus: Ports, values: Seq[Boolean]): Unit =
     inbox.offer(InboxEntry(_.set(bus, values), Some(System.nanoTime())))
 
   // --- reads ---
@@ -140,7 +140,7 @@ class LiveSim(newEngine: () => Engine, ticksPerSecond: Long = 1000, onFault: Fau
   /** The port's effective value in the last published state. */
   def get(port: Port): Option[Boolean] = published.get().get(port)
 
-  def get(bus: Bus): Vector[Option[Boolean]] = published.get().get(bus)
+  def get(bus: Ports): Vector[Option[Boolean]] = published.get().get(bus)
 
   // --- observation ---
 

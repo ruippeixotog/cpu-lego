@@ -12,7 +12,7 @@ import yosys.Design.Direction as DesignDirection
 
 case class ComponentCreator(design: Design) {
 
-  def create(moduleName: String, inPorts: Map[String, Port | Bus]): Spec[Map[String, Port | Bus]] = {
+  def create(moduleName: String, inPorts: Map[String, Port | Ports]): Spec[Map[String, Port | Ports]] = {
     val env = summon[BuilderEnv]
     inPorts.foreach(env.register(_, _, Some(Direction.Input)))
 
@@ -23,7 +23,7 @@ case class ComponentCreator(design: Design) {
       case (name, p: Port) =>
         // println(s"[in] Connecting $name to ${module.ports(name).bits.head}")
         p ~> portReg.getOrElseUpdate(module.ports(name).bits.head, new Port())
-      case (name, p: Bus) =>
+      case (name, p: Ports) =>
         module.ports(name).bits.zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
     }
 
@@ -43,7 +43,7 @@ case class ComponentCreator(design: Design) {
         case (name, p: Port) =>
           // println(s"[comp $compName] Connecting $name to ${cell.connections(name).head}")
           p ~> portReg.getOrElseUpdate(cell.connections(name).head, new Port())
-        case (name, p: Bus) =>
+        case (name, p: Ports) =>
           cell.connections(name).zipWithIndex.foreach { (bit, i) => p(i) ~> portReg.getOrElseUpdate(bit, new Port()) }
       }
     }
@@ -70,8 +70,8 @@ case class ComponentCreator(design: Design) {
   private def createFromType(
       compName: String,
       cell: Design.Cell,
-      inPorts: Map[String, Port | Bus]
-  ): Spec[Map[String, Port | Bus]] = {
+      inPorts: Map[String, Port | Ports]
+  ): Spec[Map[String, Port | Ports]] = {
     // https://yosyshq.readthedocs.io/projects/yosys/en/0.32/CHAPTER_CellLib.html
     // Semantics below transcribed from techlibs/common/simcells.v.
     def inPort(name: String): Port = inPorts(name).asInstanceOf[Port]
@@ -92,17 +92,17 @@ case class ComponentCreator(design: Design) {
       case "$_BUF_" =>
         Map("Y" -> inPort("A"))
       case "$_MUX_" =>
-        Map("Y" -> mux(Vector(inPort("A"), inPort("B")), Vector(inPort("S"))))
+        Map("Y" -> mux(Bus(inPort("A"), inPort("B")), Bus(inPort("S"))))
       case "$_MUX4_" =>
-        Map("Y" -> mux(inPortsOf("ABCD"), inPortsOf("ST")))
+        Map("Y" -> mux(Bus.of(4)(inPortsOf("ABCD")), Bus.of(2)(inPortsOf("ST"))))
       case "$_MUX8_" =>
-        Map("Y" -> mux(inPortsOf("ABCDEFGH"), inPortsOf("STU")))
+        Map("Y" -> mux(Bus.of(8)(inPortsOf("ABCDEFGH")), Bus.of(3)(inPortsOf("STU"))))
       case "$_MUX16_" =>
-        Map("Y" -> mux(inPortsOf("ABCDEFGHIJKLMNOP"), inPortsOf("STUV")))
+        Map("Y" -> mux(Bus.of(16)(inPortsOf("ABCDEFGHIJKLMNOP")), Bus.of(4)(inPortsOf("STUV"))))
       case "$_NAND_" =>
         Map("Y" -> nand(inPort("A"), inPort("B")))
       case "$_NMUX_" =>
-        Map("Y" -> not(mux(Vector(inPort("A"), inPort("B")), Vector(inPort("S")))))
+        Map("Y" -> not(mux(Bus(inPort("A"), inPort("B")), Bus(inPort("S")))))
       case "$_NOR_" =>
         Map("Y" -> nor(inPort("A"), inPort("B")))
       case "$_NOT_" =>

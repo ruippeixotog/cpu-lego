@@ -374,12 +374,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         275 -> setInputs(true, val1),
         300 -> { st => foreach(outs) { st.get(_) must beNone } },
         350 -> { st => foreach(outs) { st.get(_) must beNone } },
-        450 -> { st => outs.map(st.get).sequence must beSome(val1) },
+        450 -> { st => outs.ports.map(st.get).sequence must beSome(val1) },
         475 -> setInputs(false, val2),
-        650 -> { st => outs.map(st.get).sequence must beSome(val1) },
+        650 -> { st => outs.ports.map(st.get).sequence must beSome(val1) },
         675 -> setInputs(true, val2),
-        750 -> { st => outs.map(st.get).sequence must beSome(val1) },
-        850 -> { st => outs.map(st.get).sequence must beSome(val2) }
+        750 -> { st => outs.ports.map(st.get).sequence must beSome(val1) },
+        850 -> { st => outs.ports.map(st.get).sequence must beSome(val2) }
       )
     }
 
@@ -392,7 +392,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         var expectedOuts = Vector.fill(n)(Option.empty[Boolean])
 
         SequentialScenario(comp)
-          .withPorts(load -> false, clk -> true, clear -> false, xs -> false)
+          .withPorts(load -> false, clk -> true, clear -> false, xs.ports -> false)
           .onStart { _ => expectedOuts = Vector.fill(n)(Some(false)) }
           .onPosEdge(clk) { sim =>
             if (sim.isHigh(load)) {
@@ -413,7 +413,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "be empty for an empty input bus" in {
       val (outs, _) = buildAndRun { register(Vector(), Low, Low) }
-      outs must beEmpty
+      outs.ports must beEmpty
     }
   }
 
@@ -421,13 +421,13 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "be empty for a zero width" in {
       val (outs, _) = buildAndRun { counter(0, High, Low, High) }
-      outs must beEmpty
+      outs.ports must beEmpty
     }
 
     "count the number of clock cycles when count is High" in {
       val clear = newPort()
       val (outs, comp) = buildComponent { counter(2, High, clock(100), clear) }
-      outs must haveLength(2)
+      outs.ports must haveLength(2)
 
       def getOutAsInt(sim: GateProcessor): Option[Int] =
         sim.get(outs).sequence.map(_.toInt)
@@ -450,7 +450,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       forAll(Gen.choose(1, 10)) { n =>
         val count, clk, clear = newPort()
         val (outs, comp) = buildComponent { counter(n, count, clk, clear) }
-        outs must haveLength(n)
+        outs.ports must haveLength(n)
 
         var expectedOut = 0
 
@@ -472,7 +472,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
 
     "be empty for an empty preset bus" in {
       val (outs, _) = buildAndRun { presettableCounter(Vector(), Low, Low, High) }
-      outs must beEmpty
+      outs.ports must beEmpty
     }
   }
 
@@ -483,12 +483,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         val ps = newBus(n)
         val load, clk, clear = newPort()
         val (outs, comp) = buildComponent { presettableCounter(ps, load, clk, clear) }
-        outs must haveLength(n)
+        outs.ports must haveLength(n)
 
         var expectedOut = 0
 
         SequentialScenario(comp)
-          .withPorts(load -> false, clk -> true, clear -> false, ps -> false)
+          .withPorts(load -> false, clk -> true, clear -> false, ps.ports -> false)
           .onStart { _ => expectedOut = 0 }
           .onNegEdge(clk) { sim =>
             expectedOut = (expectedOut + 1) % (1 << n)
@@ -509,7 +509,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       forAll(Gen.choose(1, 10)) { n =>
         val clk, clear = newPort()
         val (outs, comp) = buildComponent { ringCounter(n, clk, clear) }
-        outs must haveLength(n)
+        outs.ports must haveLength(n)
 
         var expectedIdx = 0
 
@@ -536,14 +536,14 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         val addr = newBus(addrN)
         val we, ce = newPort()
         val (outs, comp) = buildComponent { ram(ins, addr, we, ce) }
-        outs must haveLength(inN)
+        outs.ports must haveLength(inN)
 
         var mem: Array[Vector[Option[Boolean]]] = Array.fill(1 << addrN)(Vector.fill(inN)(None))
 
         def addrIdx(sim: GateProcessor) = sim.get(addr).sequence.get.toInt
 
         SequentialScenario(comp)
-          .withPorts(we -> false, ce -> false, ins -> false, addr -> false)
+          .withPorts(we -> false, ce -> false, ins.ports -> false, addr.ports -> false)
           .onStart { _ => mem = Array.fill(1 << addrN)(Vector.fill(inN)(None)) }
           .whenHigh(we) { sim => mem(addrIdx(sim)) = sim.get(ins) }
           .check { sim =>
@@ -560,7 +560,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
       val ins = newBus(4)
       val we, ce = newPort()
       val (outs, comp) = buildComponent { ram(ins, Vector(), we, ce) }
-      outs must haveLength(4)
+      outs.ports must haveLength(4)
 
       runPlan(
         comp,
@@ -580,12 +580,12 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
         forAll(Gen.listOfN(1 << addrN, Gen.listOfN(4, Gen.oneOf(false, true)))) { data =>
           val addr = newBus(addrN)
           val (outs, comp) = buildComponent { rom(data, addr) }
-          outs must haveLength(data.head.length)
+          outs.ports must haveLength(data.head.length)
 
           def addrIdx(sim: GateProcessor) = sim.get(addr).sequence.get.toInt
 
           SequentialScenario(comp)
-            .withPorts(addr -> false)
+            .withPorts(addr.ports -> false)
             .check { sim =>
               sim.get(outs) must beEqualTo(data(addrIdx(sim)).map(Some.apply))
             }
@@ -609,7 +609,7 @@ class MemorySpec extends BaseSpec with SequentialScenarios {
     "read a single word with an empty address bus" in {
       val data = Seq(Seq(true, false, true))
       val (outs, sim) = buildAndRun { rom(data, Vector()) }
-      outs must haveLength(3)
+      outs.ports must haveLength(3)
       sim.get(outs).sequence must beSome(Vector(true, false, true))
     }
   }
