@@ -14,15 +14,15 @@ class BenchSpec extends BaseSpec {
 
   "Sap1Workload" should {
     "run the demo program to halt with the expected output" in {
-      val run = Sap1Workload.build().asInstanceOf[Sap1Run]
-      val ticks = run.iterate()
-      ticks must be_>(0L)
+      val run = Sap1Workload.build(Bench.gateEngineFactory).asInstanceOf[Sap1Run]
+      val edges = run.iterate()
+      edges must beEqualTo(131L)
       // 10 + 14 + 18 - 20 = 22, the same assertion SAP1App prints
       run.engine.get(run.outBus).map(_.getOrElse(false)).toSignedInt must beEqualTo(22)
     }
 
-    "advance by a deterministic tick count per iteration" in {
-      val run = Sap1Workload.build().asInstanceOf[Sap1Run]
+    "return a deterministic edge count per iteration" in {
+      val run = Sap1Workload.build(Bench.gateEngineFactory).asInstanceOf[Sap1Run]
       val first = run.iterate()
       val second = run.iterate()
       second must beEqualTo(first)
@@ -31,19 +31,32 @@ class BenchSpec extends BaseSpec {
     "count signal transitions in profiling mode" in {
       val result = Bench.run(Sap1Workload, Bench.Options(profile = true, fixedIterations = Some(1), warmup = 0))
       result.transitions must be_>(0L)
-      result.transitionsPerTick must be_>(0.0)
+      result.transitionsPerEdge must be_>(0.0)
     }
   }
 
   "WorkloadResult" should {
     "derive the reported metrics" in {
-      // 2e6 ticks in 1 s = 2 MHz simulated at 1 tick = 1 ns
-      val r = WorkloadResult("w", "d", 2, 2000000L, 1000000000L, 6000000L)
-      r.ticksPerSecond must beEqualTo(2000000.0)
-      r.simulatedMHz must beEqualTo(2.0)
-      r.nsPerTick must beEqualTo(500.0)
-      r.transitionsPerTick must beEqualTo(3.0)
-      r.deviceCallbackNs must beEqualTo(0L)
+      // 264 edges in 0.264 s = 1000 edges/s, 1 ms per edge
+      val r = WorkloadResult("w", 2, 264L, 264000000L, 792L)
+      r.edgesPerSecond must beEqualTo(1000.0)
+      r.nsPerEdge must beEqualTo(1000000.0)
+      r.transitionsPerEdge must beEqualTo(3.0)
+    }
+  }
+
+  "Report" should {
+    "merge new rows into a previous table by workload name" in {
+      val old = List(
+        WorkloadResult("sap1", 3, 396L, 1000000000L, 0L),
+        WorkloadResult("other", 2, 200L, 500000000L, 0L)
+      )
+      val previous = Report.markdown(old)
+      val fresh = List(WorkloadResult("sap1", 4, 528L, 2000000000L, 0L))
+      val merged = Report.markdown(fresh, Some(previous))
+      merged must contain("| sap1 | 4 | 528 |")
+      merged must contain("| other | 2 | 200 |")
+      merged must not(contain("| sap1 | 3 | 396 |"))
     }
   }
 }

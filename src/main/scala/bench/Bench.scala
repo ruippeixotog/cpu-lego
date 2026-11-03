@@ -1,32 +1,27 @@
 package bench
 
+import simulator.{GateEngine, GateProcessor}
+
 /** Results of benchmarking one workload. */
 case class WorkloadResult(
     workload: String,
-    description: String,
     iterations: Int,
-    totalTicks: Long,
+    totalEdges: Long,
     wallNs: Long,
     transitions: Long // 0 unless --profile
 ) {
 
-  /** Simulated ticks per wall-clock second. */
-  def ticksPerSecond: Double = totalTicks.toDouble / wallNs * 1e9
+  /** Clock edges per wall-clock second. */
+  def edgesPerSecond: Double = totalEdges.toDouble / wallNs * 1e9
 
-  /** Simulated megahertz: 1 tick = 1 ns of simulated time. */
-  def simulatedMHz: Double = ticksPerSecond / 1e6
+  /** Wall-clock nanoseconds per clock edge. */
+  def nsPerEdge: Double = wallNs.toDouble / totalEdges
 
-  /** Wall-clock nanoseconds per simulated tick. */
-  def nsPerTick: Double = wallNs.toDouble / totalTicks
-
-  /** Signal transitions per simulated tick (`--profile` mode only). */
-  def transitionsPerTick: Double = transitions.toDouble / totalTicks
+  /** Signal transitions per clock edge (`--profile` mode only). */
+  def transitionsPerEdge: Double = transitions.toDouble / totalEdges
 
   /** Wall-clock nanoseconds per signal transition (`--profile` mode only). */
   def nsPerTransition: Double = wallNs.toDouble / transitions
-
-  /** Wall-clock time spent in device callbacks. Reserved for the device API (#16); zero until devices exist. */
-  def deviceCallbackNs: Long = 0L
 }
 
 /** Best-effort description of the machine a benchmark ran on, for `bench/results.md`. */
@@ -50,6 +45,10 @@ object MachineInfo {
 }
 
 object Bench {
+
+  /** The gate-level engine, Bench's default choice. */
+  val gateEngineFactory: Workload.EngineFactory =
+    (circuit, conf, portNames) => GateEngine(GateProcessor.setup(circuit, conf, portNames))
 
   case class Options(
       workload: Option[String] = None,
@@ -76,7 +75,9 @@ object Bench {
     println(Report.text(results, opts))
     if (opts.writeResults) {
       val path = java.nio.file.Paths.get("bench/results.md")
-      java.nio.file.Files.writeString(path, Report.markdown(results))
+      val previous =
+        if (java.nio.file.Files.exists(path)) Some(java.nio.file.Files.readString(path)) else None
+      java.nio.file.Files.writeString(path, Report.markdown(results, previous))
       println(s"wrote $path")
     }
   }
@@ -84,8 +85,12 @@ object Bench {
   /** Warm up, then measure iterations until at least `minSeconds` of wall time (bounded), or exactly `fixedIterations`.
     * Returns the aggregated result.
     */
-  def run(workload: Workload, opts: Options): WorkloadResult = {
-    val run = workload.build()
+  def run(
+      workload: Workload,
+      opts: Options,
+      engineFactory: Workload.EngineFactory = gateEngineFactory
+  ): WorkloadResult = {
+    val run = workload.build(engineFactory)
     (1 to opts.warmup).foreach(_ => run.iterate())
 
     val countTransitions =
@@ -95,7 +100,7 @@ object Bench {
         () => count
       } else () => 0L
 
-    var totalTicks = 0L
+    var totalEdges = 0L
     var iters = 0
     val minNs = (opts.minSeconds * 1e9).toLong
     val t0 = System.nanoTime()
@@ -104,11 +109,11 @@ object Bench {
       case None => iters >= 3 && (System.nanoTime() - t0 >= minNs || iters >= 100)
     }
     while (!enough) {
-      totalTicks += run.iterate()
+      totalEdges += run.iterate()
       iters += 1
     }
     val wallNs = System.nanoTime() - t0
-    WorkloadResult(workload.name, workload.description, iters, totalTicks, wallNs, countTransitions())
+    WorkloadResult(workload.name, iters, totalEdges, wallNs, countTransitions())
   }
 
   private def parse(args: List[String]): Options = {
@@ -129,15 +134,20 @@ object Bench {
           |                --min-seconds of wall time, at least 3 iterations)
           |  --min-seconds   minimum measured wall time per workload (default 2.0)
           |  --profile       count signal transitions via engine watch() and report
-          |                events per tick (adds observer overhead)
-          |  --write-results rewrite bench/results.md with this run""".stripMargin)
+          |                events per edge (adds observer overhead)
+          |  --write-results merge this run's rows into bench/results.md""".stripMargin)
         sys.exit(0)
       case bad :: _ =>
         println(s"unknown argument '$bad'; see --help")
         sys.exit(1)
       case Nil => o
     }
-    loop(args, Options())
+    val opts = loop(args, Options())
+    if (opts.profile && opts.writeResults) {
+      println("--profile cannot be combined with --write-results: profiled numbers must not become the baseline")
+      sys.exit(1)
+    }
+    opts
   }
 }
 
@@ -148,41 +158,53 @@ private[bench] object Report {
     sb.append("machine:\n")
     MachineInfo.describe.linesIterator.foreach(l => sb.append(s"  $l\n"))
     sb.append(
-      f"${"workload"}%-10s ${"iters"}%5s ${"ticks"}%12s ${"wall s"}%8s ${"ticks/s"}%12s ${"MHz"}%8s ${"ns/tick"}%9s"
+      f"${"workload"}%-10s ${"iters"}%5s ${"edges"}%12s ${"wall s"}%8s ${"edges/s"}%12s ${"ns/edge"}%9s"
     )
-    if (opts.profile) sb.append(f" ${"ev/tick"}%9s ${"ns/ev"}%9s")
+    if (opts.profile) sb.append(f" ${"ev/edge"}%9s ${"ns/ev"}%9s")
     sb.append("\n")
     results.foreach { r =>
       sb.append(
-        f"${r.workload}%-10s ${r.iterations}%5d ${r.totalTicks}%12d ${r.wallNs / 1e9}%8.2f " +
-          f"${r.ticksPerSecond}%12.0f ${r.simulatedMHz}%8.4f ${r.nsPerTick}%9.1f"
+        f"${r.workload}%-10s ${r.iterations}%5d ${r.totalEdges}%12d ${r.wallNs / 1e9}%8.2f " +
+          f"${r.edgesPerSecond}%12.0f ${r.nsPerEdge}%9.1f"
       )
-      if (opts.profile) sb.append(f" ${r.transitionsPerTick}%9.1f ${r.nsPerTransition}%9.1f")
+      if (opts.profile) sb.append(f" ${r.transitionsPerEdge}%9.1f ${r.nsPerTransition}%9.1f")
       sb.append("\n")
     }
     sb.toString
   }
 
-  def markdown(results: List[WorkloadResult]): String = {
+  /** Render the results table, merging this run's rows into a previous table by workload name: rerun workloads are
+    * replaced in place, untouched rows are kept, new workloads are appended. Rows in an older column layout are
+    * dropped, since their columns no longer exist.
+    */
+  def markdown(results: List[WorkloadResult], previous: Option[String] = None): String = {
     val sb = new StringBuilder
     sb.append("# Benchmark results\n\n")
-    sb.append(
-      "Tracked by hand: optimisation PRs report their gain here. Update with `sbt \"bench --write-results\"`.\n\n"
-    )
+    sb.append("Optimisation PRs report their gain here. Update with `sbt \"bench --write-results\"`.\n\n")
     sb.append("## Machine\n\n```\n")
     sb.append(MachineInfo.describe)
     sb.append("\n```\n\n## Results\n\n")
-    sb.append("| workload | iters | ticks | wall s | ticks/s | MHz | ns/tick |\n")
-    sb.append("|---|---|---|---|---|---|---|\n")
-    results.foreach { r =>
-      sb.append(
-        f"| ${r.workload} | ${r.iterations} | ${r.totalTicks} | ${r.wallNs / 1e9}%.2f " +
-          f"| ${r.ticksPerSecond}%.0f | ${r.simulatedMHz}%.4f | ${r.nsPerTick}%.1f |\n"
-      )
-    }
+    sb.append("| workload | iters | edges | wall s | edges/s | ns/edge |\n")
+    sb.append("|---|---|---|---|---|---|\n")
+    val freshRows = results.map(r => r.workload -> row(r)).toMap
+    val previousRows = previous.toList.flatMap(parseRows)
+    previousRows.foreach { case (name, oldRow) => sb.append(freshRows.getOrElse(name, oldRow)).append("\n") }
+    results.filterNot(r => previousRows.exists(_._1 == r.workload)).foreach(r => sb.append(row(r)).append("\n"))
     sb.append("\n_Measured with `sbt bench` (")
     sb.append(java.time.LocalDate.now().toString)
     sb.append(")._\n")
     sb.toString
   }
+
+  private def row(r: WorkloadResult): String =
+    f"| ${r.workload} | ${r.iterations} | ${r.totalEdges} | ${r.wallNs / 1e9}%.2f " +
+      f"| ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f |"
+
+  /** Rows of a previous results table, as (workload, row) pairs in table order. */
+  private def parseRows(text: String): List[(String, String)] =
+    text.linesIterator.toList.flatMap { line =>
+      val cells = line.split("\\|", -1).map(_.trim).toList
+      // "| workload | iters | edges | wall s | edges/s | ns/edge |" splits into 8 cells (empty ends)
+      if (cells.length == 8 && cells(2).forall(_.isDigit) && cells(2).nonEmpty) Some((cells(1), line)) else None
+    }
 }
