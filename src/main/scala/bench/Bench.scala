@@ -75,9 +75,7 @@ object Bench {
     println(Report.text(results, opts))
     if (opts.writeResults) {
       val path = java.nio.file.Paths.get("bench/results.md")
-      val previous =
-        if (java.nio.file.Files.exists(path)) Some(java.nio.file.Files.readString(path)) else None
-      java.nio.file.Files.writeString(path, Report.markdown(results, previous))
+      java.nio.file.Files.writeString(path, Report.markdown(results))
       println(s"wrote $path")
     }
   }
@@ -135,7 +133,8 @@ object Bench {
           |  --min-seconds   minimum measured wall time per workload (default 2.0)
           |  --profile       count signal transitions via engine watch() and report
           |                events per edge (adds observer overhead)
-          |  --write-results merge this run's rows into bench/results.md""".stripMargin)
+          |  --write-results write the full suite's rows to bench/results.md
+          |                (cannot be combined with --workload or --profile)""".stripMargin)
         sys.exit(0)
       case bad :: _ =>
         println(s"unknown argument '$bad'; see --help")
@@ -145,6 +144,12 @@ object Bench {
     val opts = loop(args, Options())
     if (opts.profile && opts.writeResults) {
       println("--profile cannot be combined with --write-results: profiled numbers must not become the baseline")
+      sys.exit(1)
+    }
+    if (opts.workload.isDefined && opts.writeResults) {
+      println(
+        "--workload cannot be combined with --write-results: the file must record one full-suite run on one machine"
+      )
       sys.exit(1)
     }
     opts
@@ -173,11 +178,8 @@ private[bench] object Report {
     sb.toString
   }
 
-  /** Render the results table, merging this run's rows into a previous table by workload name: rerun workloads are
-    * replaced in place, untouched rows are kept, new workloads are appended. Rows in an older column layout are
-    * dropped, since their columns no longer exist.
-    */
-  def markdown(results: List[WorkloadResult], previous: Option[String] = None): String = {
+  /** Render the results table for one full-suite run on one machine. */
+  def markdown(results: List[WorkloadResult]): String = {
     val sb = new StringBuilder
     sb.append("# Benchmark results\n\n")
     sb.append("Optimisation PRs report their gain here. Update with `sbt \"bench --write-results\"`.\n\n")
@@ -186,10 +188,7 @@ private[bench] object Report {
     sb.append("\n```\n\n## Results\n\n")
     sb.append("| workload | iters | edges | wall s | edges/s | ns/edge |\n")
     sb.append("|---|---|---|---|---|---|\n")
-    val freshRows = results.map(r => r.workload -> row(r)).toMap
-    val previousRows = previous.toList.flatMap(parseRows)
-    previousRows.foreach { case (name, oldRow) => sb.append(freshRows.getOrElse(name, oldRow)).append("\n") }
-    results.filterNot(r => previousRows.exists(_._1 == r.workload)).foreach(r => sb.append(row(r)).append("\n"))
+    results.foreach(r => sb.append(row(r)).append("\n"))
     sb.append("\n_Measured with `sbt bench` (")
     sb.append(java.time.LocalDate.now().toString)
     sb.append(")._\n")
@@ -200,11 +199,4 @@ private[bench] object Report {
     f"| ${r.workload} | ${r.iterations} | ${r.totalEdges} | ${r.wallNs / 1e9}%.2f " +
       f"| ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f |"
 
-  /** Rows of a previous results table, as (workload, row) pairs in table order. */
-  private def parseRows(text: String): List[(String, String)] =
-    text.linesIterator.toList.flatMap { line =>
-      val cells = line.split("\\|", -1).map(_.trim).toList
-      // "| workload | iters | edges | wall s | edges/s | ns/edge |" splits into 8 cells (empty ends)
-      if (cells.length == 8 && cells(2).forall(_.isDigit) && cells(2).nonEmpty) Some((cells(1), line)) else None
-    }
 }

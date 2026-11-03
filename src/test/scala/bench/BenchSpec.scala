@@ -46,17 +46,15 @@ class BenchSpec extends BaseSpec {
   }
 
   "Report" should {
-    "merge new rows into a previous table by workload name" in {
-      val old = List(
-        WorkloadResult("sap1", 3, 396L, 1000000000L, 0L),
+    "render exactly the given rows for one full-suite run" in {
+      val results = List(
+        WorkloadResult("sap1", 4, 528L, 2000000000L, 0L),
         WorkloadResult("other", 2, 200L, 500000000L, 0L)
       )
-      val previous = Report.markdown(old)
-      val fresh = List(WorkloadResult("sap1", 4, 528L, 2000000000L, 0L))
-      val merged = Report.markdown(fresh, Some(previous))
-      merged must contain("| sap1 | 4 | 528 |")
-      merged must contain("| other | 2 | 200 |")
-      merged must not(contain("| sap1 | 3 | 396 |"))
+      val rendered = Report.markdown(results)
+      rendered must contain("| sap1 | 4 | 528 |")
+      rendered must contain("| other | 2 | 200 |")
+      rendered must contain("## Machine")
     }
   }
 }

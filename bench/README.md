@@ -21,7 +21,7 @@ Options (`sbt "bench --help"`):
 | `--iterations <n>` | time-based | fixed measured iteration count |
 | `--min-seconds <s>` | 2.0 | minimum measured wall time per workload (at least 3 iterations) |
 | `--profile` | off | count signal transitions via `engine.watch()`; reports events per edge (adds observer overhead) |
-| `--write-results` | off | merge this run's rows into `bench/results.md` |
+| `--write-results` | off | write the full suite's rows to `bench/results.md` (cannot be combined with `--workload` or `--profile`) |
 
 The primary metrics are **edges/s** (clock edges per wall-clock second) and
 **ns/edge** (wall-clock nanoseconds per clock edge). `--profile` additionally
@@ -58,5 +58,5 @@ wall-clock waits.
 
 ## Planned workloads
 
-- **VM80A**: executing a small loop; the memory model is still open.
+- **VM80A**: deferred to #116; lands once a memory device exists.
 - **6502 / Apple IIe / PC**: add once those machines exist.

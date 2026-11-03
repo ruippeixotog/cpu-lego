@@ -15,6 +15,6 @@ JVM: 25.0.4.1 (Eclipse Adoptium)
 
 | workload | iters | edges | wall s | edges/s | ns/edge |
 |---|---|---|---|---|---|
-| sap1 | 4 | 524 | 10.21 | 51 | 19487402.9 |
+| sap1 | 7 | 917 | 2.20 | 416 | 2403189.3 |
 
 _Measured with `sbt bench` (2026-11-03)._
