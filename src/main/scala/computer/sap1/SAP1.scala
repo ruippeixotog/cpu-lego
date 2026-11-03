@@ -36,11 +36,11 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
   // derived wall-clock phase bound comfortably covers gate propagation.
   private val ticksPerSecond = 100000
 
-  /** Conservative hardware-style phase bound, in simulation ticks: every combinational path settles within
-    * (components + wires + 1) gate/wire delays of its inputs changing, so holding one bound guarantees the previous
-    * drive has propagated everywhere. The short-circuit tolerance is excluded: it only governs multi-driver
-    * conflicts, not propagation. Exposed for engine-native drivers (e.g. benchmarks) that cannot use the wall-clock
-    * paced [[Sim]] protocol.
+  /** Conservative hardware-style phase bound, in simulation ticks: every combinational path settles within (components
+    * + wires + 1) gate/wire delays of its inputs changing, so holding one bound guarantees the previous drive has
+    * propagated everywhere. The short-circuit tolerance is excluded: it only governs multi-driver conflicts, not
+    * propagation. Exposed for engine-native drivers (e.g. benchmarks) that cannot use the wall-clock paced [[Sim]]
+    * protocol.
     */
   val phaseBoundTicks: Long =
     (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)

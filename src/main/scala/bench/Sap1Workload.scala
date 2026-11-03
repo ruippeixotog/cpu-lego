@@ -10,8 +10,8 @@ import util.Implicits.*
   * repeat. One iteration is one full program execution.
   *
   * The driver is engine-native: it mirrors the wall-clock protocol of [[SAP1.run]] — setup,
-  * [[computer.sap1.Programmer.load]], clock-until-halt — with tick bounds instead of wall-clock waits. RAM has no
-  * clear input, so the program survives the per-iteration reset and is loaded only once.
+  * [[computer.sap1.Programmer.load]], clock-until-halt — with tick bounds instead of wall-clock waits. RAM has no clear
+  * input, so the program survives the per-iteration reset and is loaded only once.
   */
 object Sap1Workload extends Workload {
 
@@ -89,10 +89,10 @@ private[bench] final class Sap1Run(sap1: SAP1, engineFactory: Workload.EngineFac
     engine.runTo(engine.tick + bound)
   }
 
-  /** Bit-bang the clock until the program halts, counting driven clock edges. The derived clock is a toggle
-    * flip-flop on the driven clock, so each rising edge of the driven clock is followed until the derived clock
-    * reaches the expected level — or the halt line asserts, which freezes the derived clock. Releasing the driven
-    * clock holds one bound: the hardware equivalent of a minimum pulse width.
+  /** Bit-bang the clock until the program halts, counting driven clock edges. The derived clock is a toggle flip-flop
+    * on the driven clock, so each rising edge of the driven clock is followed until the derived clock reaches the
+    * expected level — or the halt line asserts, which freezes the derived clock. Releasing the driven clock holds one
+    * bound: the hardware equivalent of a minimum pulse width.
     */
   private def clockUntilHalt(): Long = {
     var edges = 0L

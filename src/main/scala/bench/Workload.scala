@@ -37,8 +37,8 @@ trait WorkloadRun {
   /** The circuit under measurement. */
   def circuit: Circuit
 
-  /** Drive exactly one benchmark iteration (e.g. run the demo program to completion). Returns the number of clock
-    * edges driven during the iteration. Must be deterministic: repeated calls return the same count.
+  /** Drive exactly one benchmark iteration (e.g. run the demo program to completion). Returns the number of clock edges
+    * driven during the iteration. Must be deterministic: repeated calls return the same count.
     */
   def iterate(): Long
 
