@@ -31,6 +31,8 @@ object MachineInfo {
   def cpu: String = {
     val model = readFirst("/proc/cpuinfo", "model name")
       .orElse(sysctl("machdep.cpu.brand_string"))
+      .orElse(readWhole("/proc/device-tree/model"))
+      .orElse(lscpuModel)
       .getOrElse("unknown")
     s"$model x${Runtime.getRuntime.availableProcessors}"
   }
@@ -54,14 +56,31 @@ object MachineInfo {
       finally src.close()
     } catch { case _: Exception => None }
 
-  private def sysctl(key: String): Option[String] =
+  /** Whole file content, trimmed — device-tree files carry no newline and a trailing NUL, both trimmed away. */
+  private def readWhole(file: String): Option[String] =
+    try {
+      val src = scala.io.Source.fromFile(file)
+      try Some(src.mkString.trim).filter(_.nonEmpty)
+      finally src.close()
+    } catch { case _: Exception => None }
+
+  private def run(cmd: Seq[String]): Option[String] =
     try {
       val out = new StringBuilder
       val code = scala.sys.process
-        .Process(Seq("sysctl", "-n", key))
-        .!(scala.sys.process.ProcessLogger(s => { out.append(s); () }))
-      if (code == 0) Some(out.toString.trim).filter(_.nonEmpty) else None
+        .Process(cmd)
+        .!(scala.sys.process.ProcessLogger(s => { out.append(s).append("\n"); () }))
+      if (code == 0) Some(out.toString).filter(_.nonEmpty) else None
     } catch { case _: Exception => None }
+
+  private def sysctl(key: String): Option[String] =
+    run(Seq("sysctl", "-n", key)).map(_.trim).filter(_.nonEmpty)
+
+  /** `Model name` field from `lscpu`, e.g. `Cortex-A76` on ARM Linux without `/proc/cpuinfo` entries. */
+  private def lscpuModel: Option[String] =
+    run(Seq("lscpu"))
+      .flatMap(_.linesIterator.find(_.startsWith("Model name:")).map(_.split(":", 2)(1).trim))
+      .filter(_.nonEmpty)
 }
 
 object Bench {
@@ -178,23 +197,18 @@ object Bench {
   }
 }
 
-/** The log of `master`'s performance in `bench/results.md`: one appended row per workload per run.
-  *
-  * Only the repo owner writes it, from their machine, on `master` — `write` refuses unless HEAD is `master` and the
-  * working tree is clean apart from `bench/results.md` itself, so every row maps to a commit anyone can check out.
-  * Optimisation PRs never touch the file; they report base vs head in the PR description instead.
-  */
+/** The log of `master`'s performance in `bench/results.md`: one appended row per workload per run. */
 private[bench] object ResultsLog {
   val relativePath = "bench/results.md"
 
   /** Check the write preconditions; on success the short commit the new rows will cite. */
-  def guard(cwd: java.io.File = new java.io.File(".")): Either[String, String] = {
+  def guard(): Either[String, String] = {
     def git(args: String*): Either[String, String] =
       try {
         val out = new StringBuilder
         val err = new StringBuilder
         val code = scala.sys.process
-          .Process(Seq("git") ++ args, cwd)
+          .Process(Seq("git") ++ args)
           .!(
             scala.sys.process
               .ProcessLogger(s => { out.append(s).append("\n"); () }, s => { err.append(s).append("\n"); () })
@@ -204,49 +218,35 @@ private[bench] object ResultsLog {
     for {
       branch <- git("rev-parse", "--abbrev-ref", "HEAD").left.map(_ => "cannot determine the current branch")
       _ <- Either.cond(branch == "master", (), s"HEAD is on '$branch', not 'master'")
-      status <- git("status", "--porcelain").left.map(_ => "cannot read the working tree status")
-      stray = status.linesIterator
-        .filter(_.nonEmpty)
-        .map { line =>
-          val path = line.drop(3)
-          if (path.contains(" -> ")) path.split(" -> ", 2)(1) else path
-        }
-        .filterNot(_ == relativePath)
-        .toList
-      _ <- Either.cond(stray.isEmpty, (), s"working tree has changes outside $relativePath: ${stray.mkString(", ")}")
+      status <- git("status", "--porcelain", "--", ".", s":!$relativePath").left
+        .map(_ => "cannot read the working tree status")
+      _ <- Either.cond(
+        status.isEmpty,
+        (),
+        s"working tree has changes outside $relativePath:\n$status"
+      )
       commit <- git("rev-parse", "--short", "HEAD").left.map(_ => "cannot determine HEAD's commit")
     } yield commit
   }
 
-  /** Append one row per result to the log file, creating it from the header if absent. */
+  /** Append one row per result to the log file, which ships in the repo. */
   def write(results: List[WorkloadResult]): Either[String, java.nio.file.Path] =
     guard() match {
       case Left(err) => Left(err)
       case Right(commit) =>
         val path = java.nio.file.Paths.get(relativePath)
-        val existing =
-          if (java.nio.file.Files.exists(path)) java.nio.file.Files.readString(path) else ""
-        java.nio.file.Files.writeString(
-          path,
-          Report.append(existing, results, java.time.LocalDate.now().toString, commit)
-        )
-        Right(path)
+        try {
+          java.nio.file.Files.writeString(
+            path,
+            Report.rows(results, java.time.LocalDate.now().toString, commit),
+            java.nio.file.StandardOpenOption.APPEND
+          )
+          Right(path)
+        } catch { case e: Exception => Left(e.getMessage) }
     }
 }
 
 private[bench] object Report {
-
-  /** The log file's header: title, policy, and the table header with no rows. */
-  def header: String =
-    """# Benchmark results
-      |
-      |Log of `master`'s performance, updated only by the repo owner from their machine on `master`
-      |with `sbt "bench --write-results"`. Optimisation PRs never touch this file; they report base
-      |vs head, measured back-to-back on the same machine, in the PR description instead.
-      |
-      || date | commit | workload | iters | edges/s | ns/edge | JVM | CPU |
-      ||---|---|---|---|---|---|---|---|
-      |""".stripMargin
 
   /** One log row per result, each carrying its own date, commit, JVM and CPU. */
   def rows(results: List[WorkloadResult], date: String, commit: String): String =
@@ -255,12 +255,6 @@ private[bench] object Report {
         f"| $date | $commit | ${r.workload} | ${r.iterations} | ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f | ${MachineInfo.jvm} | ${MachineInfo.cpu} |"
       }
       .mkString("", "\n", "\n")
-
-  /** Append a run's rows to existing log content (the header when the file is new). */
-  def append(existing: String, results: List[WorkloadResult], date: String, commit: String): String = {
-    val base = if (existing.isEmpty) header else if (existing.endsWith("\n")) existing else existing + "\n"
-    base + rows(results, date, commit)
-  }
 
   def text(results: List[WorkloadResult], opts: Bench.Options): String = {
     val sb = new StringBuilder
