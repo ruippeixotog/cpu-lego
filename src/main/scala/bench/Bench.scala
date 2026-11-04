@@ -24,16 +24,27 @@ case class WorkloadResult(
   def nsPerTransition: Double = wallNs.toDouble / transitions
 }
 
-/** Best-effort description of the machine a benchmark ran on, for `bench/results.md`. */
+/** Best-effort description of the machine a benchmark ran on, for the console report and `bench/results.md`. */
 object MachineInfo {
 
+  /** CPU model with processor count, e.g. `AMD EPYC 9D25 126-Core Processor x4`. */
+  def cpu: String = {
+    val model = readFirst("/proc/cpuinfo", "model name")
+      .orElse(sysctl("machdep.cpu.brand_string"))
+      .getOrElse("unknown")
+    s"$model x${Runtime.getRuntime.availableProcessors}"
+  }
+
+  /** JVM version and vendor, e.g. `25.0.4.1 (Eclipse Adoptium)`. */
+  def jvm: String =
+    s"${sys.props.getOrElse("java.version", "?")} (${sys.props.getOrElse("java.vendor", "?")})"
+
   def describe: String = {
-    val cpu = readFirst("/proc/cpuinfo", "model name").getOrElse("unknown")
     val memKb = readFirst("/proc/meminfo", "MemTotal").getOrElse("unknown")
     s"""OS: ${sys.props.getOrElse("os.name", "?")} ${sys.props.getOrElse("os.arch", "?")}
-       |CPU: $cpu x${Runtime.getRuntime.availableProcessors}
+       |CPU: $cpu
        |Memory: $memKb
-       |JVM: ${sys.props.getOrElse("java.version", "?")} (${sys.props.getOrElse("java.vendor", "?")})""".stripMargin
+       |JVM: $jvm""".stripMargin
   }
 
   private def readFirst(file: String, prefix: String): Option[String] =
@@ -41,6 +52,15 @@ object MachineInfo {
       val src = scala.io.Source.fromFile(file)
       try src.getLines().find(_.startsWith(prefix)).map(_.split(":", 2)(1).trim)
       finally src.close()
+    } catch { case _: Exception => None }
+
+  private def sysctl(key: String): Option[String] =
+    try {
+      val out = new StringBuilder
+      val code = scala.sys.process
+        .Process(Seq("sysctl", "-n", key))
+        .!(scala.sys.process.ProcessLogger(s => { out.append(s); () }))
+      if (code == 0) Some(out.toString.trim).filter(_.nonEmpty) else None
     } catch { case _: Exception => None }
 }
 
@@ -73,10 +93,11 @@ object Bench {
     }
     val results = selected.map(run(_, opts))
     println(Report.text(results, opts))
-    if (opts.writeResults) {
-      val path = java.nio.file.Paths.get("bench/results.md")
-      java.nio.file.Files.writeString(path, Report.markdown(results))
-      println(s"wrote $path")
+    if (opts.writeResults) ResultsLog.write(results) match {
+      case Left(err) =>
+        println(s"refusing to write bench/results.md: $err")
+        sys.exit(1)
+      case Right(path) => println(s"appended ${results.size} rows to $path")
     }
   }
 
@@ -133,8 +154,9 @@ object Bench {
           |  --min-seconds   minimum measured wall time per workload (default 2.0)
           |  --profile       count signal transitions via engine watch() and report
           |                events per edge (adds observer overhead)
-          |  --write-results write the full suite's rows to bench/results.md
-          |                (cannot be combined with --workload or --profile)""".stripMargin)
+          |  --write-results append the full suite's rows to bench/results.md
+          |                (only on master with a clean tree; cannot be combined
+          |                with --workload or --profile)""".stripMargin)
         sys.exit(0)
       case bad :: _ =>
         println(s"unknown argument '$bad'; see --help")
@@ -156,7 +178,89 @@ object Bench {
   }
 }
 
+/** The log of `master`'s performance in `bench/results.md`: one appended row per workload per run.
+  *
+  * Only the repo owner writes it, from their machine, on `master` — `write` refuses unless HEAD is `master` and the
+  * working tree is clean apart from `bench/results.md` itself, so every row maps to a commit anyone can check out.
+  * Optimisation PRs never touch the file; they report base vs head in the PR description instead.
+  */
+private[bench] object ResultsLog {
+  val relativePath = "bench/results.md"
+
+  /** Check the write preconditions; on success the short commit the new rows will cite. */
+  def guard(cwd: java.io.File = new java.io.File(".")): Either[String, String] = {
+    def git(args: String*): Either[String, String] =
+      try {
+        val out = new StringBuilder
+        val err = new StringBuilder
+        val code = scala.sys.process
+          .Process(Seq("git") ++ args, cwd)
+          .!(
+            scala.sys.process
+              .ProcessLogger(s => { out.append(s).append("\n"); () }, s => { err.append(s).append("\n"); () })
+          )
+        if (code == 0) Right(out.toString.trim) else Left(err.toString.trim)
+      } catch { case e: Exception => Left(e.getMessage) }
+    for {
+      branch <- git("rev-parse", "--abbrev-ref", "HEAD").left.map(_ => "cannot determine the current branch")
+      _ <- Either.cond(branch == "master", (), s"HEAD is on '$branch', not 'master'")
+      status <- git("status", "--porcelain").left.map(_ => "cannot read the working tree status")
+      stray = status.linesIterator
+        .filter(_.nonEmpty)
+        .map { line =>
+          val path = line.drop(3)
+          if (path.contains(" -> ")) path.split(" -> ", 2)(1) else path
+        }
+        .filterNot(_ == relativePath)
+        .toList
+      _ <- Either.cond(stray.isEmpty, (), s"working tree has changes outside $relativePath: ${stray.mkString(", ")}")
+      commit <- git("rev-parse", "--short", "HEAD").left.map(_ => "cannot determine HEAD's commit")
+    } yield commit
+  }
+
+  /** Append one row per result to the log file, creating it from the header if absent. */
+  def write(results: List[WorkloadResult]): Either[String, java.nio.file.Path] =
+    guard() match {
+      case Left(err) => Left(err)
+      case Right(commit) =>
+        val path = java.nio.file.Paths.get(relativePath)
+        val existing =
+          if (java.nio.file.Files.exists(path)) java.nio.file.Files.readString(path) else ""
+        java.nio.file.Files.writeString(
+          path,
+          Report.append(existing, results, java.time.LocalDate.now().toString, commit)
+        )
+        Right(path)
+    }
+}
+
 private[bench] object Report {
+
+  /** The log file's header: title, policy, and the table header with no rows. */
+  def header: String =
+    """# Benchmark results
+      |
+      |Log of `master`'s performance, updated only by the repo owner from their machine on `master`
+      |with `sbt "bench --write-results"`. Optimisation PRs never touch this file; they report base
+      |vs head, measured back-to-back on the same machine, in the PR description instead.
+      |
+      || date | commit | workload | iters | edges/s | ns/edge | JVM | CPU |
+      ||---|---|---|---|---|---|---|---|
+      |""".stripMargin
+
+  /** One log row per result, each carrying its own date, commit, JVM and CPU. */
+  def rows(results: List[WorkloadResult], date: String, commit: String): String =
+    results
+      .map { r =>
+        f"| $date | $commit | ${r.workload} | ${r.iterations} | ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f | ${MachineInfo.jvm} | ${MachineInfo.cpu} |"
+      }
+      .mkString("", "\n", "\n")
+
+  /** Append a run's rows to existing log content (the header when the file is new). */
+  def append(existing: String, results: List[WorkloadResult], date: String, commit: String): String = {
+    val base = if (existing.isEmpty) header else if (existing.endsWith("\n")) existing else existing + "\n"
+    base + rows(results, date, commit)
+  }
 
   def text(results: List[WorkloadResult], opts: Bench.Options): String = {
     val sb = new StringBuilder
@@ -177,26 +281,5 @@ private[bench] object Report {
     }
     sb.toString
   }
-
-  /** Render the results table for one full-suite run on one machine. */
-  def markdown(results: List[WorkloadResult]): String = {
-    val sb = new StringBuilder
-    sb.append("# Benchmark results\n\n")
-    sb.append("Optimisation PRs report their gain here. Update with `sbt \"bench --write-results\"`.\n\n")
-    sb.append("## Machine\n\n```\n")
-    sb.append(MachineInfo.describe)
-    sb.append("\n```\n\n## Results\n\n")
-    sb.append("| workload | iters | edges | wall s | edges/s | ns/edge |\n")
-    sb.append("|---|---|---|---|---|---|\n")
-    results.foreach(r => sb.append(row(r)).append("\n"))
-    sb.append("\n_Measured with `sbt bench` (")
-    sb.append(java.time.LocalDate.now().toString)
-    sb.append(")._\n")
-    sb.toString
-  }
-
-  private def row(r: WorkloadResult): String =
-    f"| ${r.workload} | ${r.iterations} | ${r.totalEdges} | ${r.wallNs / 1e9}%.2f " +
-      f"| ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f |"
 
 }

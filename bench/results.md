@@ -1,20 +1,8 @@
 # Benchmark results
 
-Optimisation PRs report their gain here. Update with `sbt "bench --write-results"`.
+Log of `master`'s performance, updated only by the repo owner from their machine on `master`
+with `sbt "bench --write-results"`. Optimisation PRs never touch this file; they report base
+vs head, measured back-to-back on the same machine, in the PR description instead.
 
-## Machine
-
-```
-OS: Linux amd64
-CPU: AMD EPYC 9D25 126-Core Processor x4
-Memory: 8124908 kB
-JVM: 25.0.4.1 (Eclipse Adoptium)
-```
-
-## Results
-
-| workload | iters | edges | wall s | edges/s | ns/edge |
-|---|---|---|---|---|---|
-| sap1 | 7 | 917 | 2.20 | 416 | 2403189.3 |
-
-_Measured with `sbt bench` (2026-11-03)._
+| date | commit | workload | iters | edges/s | ns/edge | JVM | CPU |
+|---|---|---|---|---|---|---|---|
