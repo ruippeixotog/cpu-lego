@@ -2,26 +2,41 @@ package bench
 
 import simulator.{GateEngine, GateProcessor}
 
-/** Results of benchmarking one workload. */
-case class WorkloadResult(
-    workload: String,
+/** One fork's measurement of a workload: the median ns/edge across its measured iterations. */
+case class ForkMeasurement(
+    medianNsPerEdge: Double,
     iterations: Int,
     totalEdges: Long,
-    wallNs: Long,
-    transitions: Long // 0 unless --profile
-) {
+    transitionsPerEdge: Double // 0 unless --profile
+)
 
-  /** Clock edges per wall-clock second. */
-  def edgesPerSecond: Double = totalEdges.toDouble / wallNs * 1e9
+/** A workload's result across all forks: the median, min and max of the forks' median ns/edge.
+  *
+  * Per-JVM offsets dominate the noise (the issue's findings: separate JVMs on one commit differ by 5–14% while
+  * iterations inside one JVM vary by 1.5–2%), so the median across forks is the reported number and the min–max range
+  * is the honest error bar — never a single fork's value.
+  */
+case class WorkloadResult(workload: String, forks: List[ForkMeasurement]) {
+  require(forks.nonEmpty, "a workload result needs at least one fork")
 
-  /** Wall-clock nanoseconds per clock edge. */
-  def nsPerEdge: Double = wallNs.toDouble / totalEdges
+  /** Median ns/edge across forks. */
+  def medianNsPerEdge: Double = Bench.median(forks.map(_.medianNsPerEdge))
 
-  /** Signal transitions per clock edge (`--profile` mode only). */
-  def transitionsPerEdge: Double = transitions.toDouble / totalEdges
+  /** Fastest fork's median ns/edge. */
+  def minNsPerEdge: Double = forks.map(_.medianNsPerEdge).min
+
+  /** Slowest fork's median ns/edge. */
+  def maxNsPerEdge: Double = forks.map(_.medianNsPerEdge).max
+
+  /** Clock edges per wall-clock second, from the median ns/edge. */
+  def edgesPerSecond: Double = 1e9 / medianNsPerEdge
+
+  /** Signal transitions per clock edge (`--profile` mode only), median across forks. */
+  def transitionsPerEdge: Double = Bench.median(forks.map(_.transitionsPerEdge))
 
   /** Wall-clock nanoseconds per signal transition (`--profile` mode only). */
-  def nsPerTransition: Double = wallNs.toDouble / transitions
+  def nsPerTransition: Double =
+    if (transitionsPerEdge > 0) medianNsPerEdge / transitionsPerEdge else 0.0
 }
 
 /** Best-effort description of the machine a benchmark ran on, for the console report and `bench/results.md`. */
@@ -83,6 +98,38 @@ object MachineInfo {
       .filter(_.nonEmpty)
 }
 
+/** The JDK-major pin for `--write-results`: recorded rows must come from the JDK `.sdkmanrc` pins, so a row's JVM
+  * column stays comparable with the rest of the log.
+  */
+private[bench] object JdkPin {
+
+  /** Major version of a `java.version`-style string: its leading digits. */
+  def majorOf(version: String): Option[Int] =
+    version.takeWhile(_.isDigit) match {
+      case s if s.nonEmpty => s.toIntOption
+      case _ => None
+    }
+
+  /** Major version pinned by the `java=` line of `.sdkmanrc` content. */
+  def pinnedMajor(sdkmanrc: String): Option[Int] =
+    sdkmanrc.linesIterator.find(_.startsWith("java=")).flatMap(line => majorOf(line.stripPrefix("java=")))
+
+  def check(currentVersion: String, sdkmanrc: String): Either[String, Unit] =
+    (majorOf(currentVersion), pinnedMajor(sdkmanrc)) match {
+      case (Some(current), Some(pinned)) if current == pinned => Right(())
+      case (Some(current), Some(pinned)) =>
+        Left(s"JDK major $current does not match the .sdkmanrc pin $pinned")
+      case _ => Left("cannot determine the JDK major or the .sdkmanrc pin")
+    }
+
+  /** Check the live JVM against the repo's `.sdkmanrc`. */
+  def checkLive(): Either[String, Unit] =
+    try {
+      val content = java.nio.file.Files.readString(java.nio.file.Paths.get(".sdkmanrc"))
+      check(sys.props.getOrElse("java.version", ""), content)
+    } catch { case e: Exception => Left(s"cannot read .sdkmanrc: ${e.getMessage}") }
+}
+
 object Bench {
 
   /** The gate-level engine, Bench's default choice. */
@@ -91,15 +138,33 @@ object Bench {
 
   case class Options(
       workload: Option[String] = None,
-      warmup: Int = 2,
-      fixedIterations: Option[Int] = None,
-      minSeconds: Double = 2.0,
+      forks: Option[Int] = None,
+      warmupSeconds: Double = 3.0,
+      measureSeconds: Double = 3.0,
       profile: Boolean = false,
       writeResults: Boolean = false
-  )
+  ) {
+
+    /** Forks per workload: explicit `--forks`, else 7 for `--write-results`, else 5. */
+    def resolvedForks: Int = forks.getOrElse(if (writeResults) 7 else 5)
+  }
+
+  /** Median of a non-empty sample: the middle value, or the mean of the two middle values. */
+  def median(values: Seq[Double]): Double = {
+    require(values.nonEmpty, "median of no values")
+    val sorted = values.sorted
+    val n = sorted.size
+    if (n % 2 == 1) sorted(n / 2) else (sorted(n / 2 - 1) + sorted(n / 2)) / 2.0
+  }
 
   def main(args: Array[String]): Unit = {
     val opts = parse(args.toList)
+    if (opts.writeResults) JdkPin.checkLive() match {
+      case Left(err) =>
+        println(s"refusing --write-results: $err")
+        sys.exit(1)
+      case Right(_) => ()
+    }
     val selected = opts.workload match {
       case Some(name) =>
         Workloads.named(name) match {
@@ -107,10 +172,18 @@ object Bench {
           case None =>
             println(s"unknown workload '$name'; available: ${Workloads.all.map(_.name).mkString(", ")}")
             sys.exit(1)
+            Nil
         }
       case None => Workloads.all
     }
-    val results = selected.map(run(_, opts))
+    val results =
+      try selected.map(runForked(_, opts))
+      catch {
+        case e: Exception =>
+          println(s"benchmark failed: ${e.getMessage}")
+          sys.exit(1)
+          Nil
+      }
     println(Report.text(results, opts))
     if (opts.writeResults) ResultsLog.write(results) match {
       case Left(err) =>
@@ -120,69 +193,91 @@ object Bench {
     }
   }
 
-  /** Warm up, then measure iterations until at least `minSeconds` of wall time (bounded), or exactly `fixedIterations`.
-    * Returns the aggregated result.
+  /** Run a workload in fresh JVMs, sequentially so forks never contend for CPU, and aggregate their medians.
+    * `classpath` defaults to this JVM's classpath, which is the benchmark classpath when Bench runs forked from sbt;
+    * callers running inside another JVM (e.g. tests under `Test / fork := false`) pass their own.
     */
-  def run(
+  def runForked(
       workload: Workload,
       opts: Options,
-      engineFactory: Workload.EngineFactory = gateEngineFactory
-  ): WorkloadResult = {
-    val run = workload.build(engineFactory)
-    (1 to opts.warmup).foreach(_ => run.iterate())
+      classpath: String = sys.props("java.class.path")
+  ): WorkloadResult =
+    WorkloadResult(workload.name, (1 to opts.resolvedForks).map(_ => launchFork(workload, opts, classpath)).toList)
 
-    val countTransitions =
-      if (opts.profile) {
-        var count = 0L
-        run.ports.foreach(port => run.engine.watch(port)(_ => count += 1))
-        () => count
-      } else () => 0L
-
-    var totalEdges = 0L
-    var iters = 0
-    val minNs = (opts.minSeconds * 1e9).toLong
-    val t0 = System.nanoTime()
-    def enough: Boolean = opts.fixedIterations match {
-      case Some(n) => iters >= n
-      case None => iters >= 3 && (System.nanoTime() - t0 >= minNs || iters >= 100)
+  /** Launch one benchmark JVM (same `java`, given classpath, G1 regardless of the parent's GC) and parse its result. */
+  private def launchFork(workload: Workload, opts: Options, classpath: String): ForkMeasurement = {
+    val javaBin = java.nio.file.Paths.get(sys.props("java.home"), "bin", "java").toString
+    val cmd = Seq(
+      javaBin,
+      "-XX:+UseG1GC",
+      "-cp",
+      classpath,
+      "bench.BenchFork",
+      workload.name,
+      opts.warmupSeconds.toString,
+      opts.measureSeconds.toString
+    ) ++ (if (opts.profile) Seq("--profile") else Seq.empty)
+    val out = new StringBuilder
+    val code = scala.sys.process
+      .Process(cmd)
+      .!(
+        scala.sys.process.ProcessLogger(
+          line => { out.append(line).append("\n"); () },
+          line => { System.err.println(line); () }
+        )
+      )
+    if (code != 0) throw new RuntimeException(s"benchmark fork for '${workload.name}' exited with code $code")
+    out.toString.linesIterator.find(_.startsWith(BenchFork.resultPrefix)) match {
+      case Some(line) => BenchFork.parseResult(line)
+      case None =>
+        throw new RuntimeException(s"benchmark fork for '${workload.name}' printed no result line")
     }
-    while (!enough) {
-      totalEdges += run.iterate()
-      iters += 1
-    }
-    val wallNs = System.nanoTime() - t0
-    WorkloadResult(workload.name, iters, totalEdges, wallNs, countTransitions())
   }
 
   private def parse(args: List[String]): Options = {
     def loop(rest: List[String], o: Options): Options = rest match {
       case "--workload" :: name :: tail => loop(tail, o.copy(workload = Some(name)))
-      case "--warmup" :: n :: tail => loop(tail, o.copy(warmup = n.toInt))
-      case "--iterations" :: n :: tail => loop(tail, o.copy(fixedIterations = Some(n.toInt)))
-      case "--min-seconds" :: s :: tail => loop(tail, o.copy(minSeconds = s.toDouble))
+      case "--forks" :: n :: tail => loop(tail, o.copy(forks = Some(n.toInt)))
+      case "--warmup-seconds" :: s :: tail => loop(tail, o.copy(warmupSeconds = s.toDouble))
+      case "--measure-seconds" :: s :: tail => loop(tail, o.copy(measureSeconds = s.toDouble))
       case "--profile" :: tail => loop(tail, o.copy(profile = true))
       case "--write-results" :: tail => loop(tail, o.copy(writeResults = true))
       case "--help" :: _ =>
-        println("""usage: sbt "bench [--workload <name>] [--warmup <n>] [--iterations <n>]
-          |                [--min-seconds <s>] [--profile] [--write-results]"
+        println("""usage: sbt "bench [--workload <name>] [--forks <n>]
+          |                [--warmup-seconds <s>] [--measure-seconds <s>] [--profile] [--write-results]"
           |
-          |  --workload      only run this workload (default: all registered)
-          |  --warmup        unmeasured warmup iterations (default 2)
-          |  --iterations    fixed measured iteration count (default: run until
-          |                --min-seconds of wall time, at least 3 iterations)
-          |  --min-seconds   minimum measured wall time per workload (default 2.0)
+          |  --workload       only run this workload (default: all registered)
+          |  --forks          fresh JVMs per workload (default 5, 7 with --write-results)
+          |  --warmup-seconds fixed warmup time per JVM (default 3.0)
+          |  --measure-seconds measurement time per JVM; each JVM reports its
+          |                median ns/edge across iterations (default 3.0)
           |  --profile       count signal transitions via engine watch() and report
           |                events per edge (adds observer overhead)
           |  --write-results append the full suite's rows to bench/results.md
-          |                (only on master with a clean tree; cannot be combined
-          |                with --workload or --profile)""".stripMargin)
+          |                (only on master with a clean tree, on the .sdkmanrc
+          |                JDK; cannot be combined with --workload or --profile)""".stripMargin)
         sys.exit(0)
       case bad :: _ =>
         println(s"unknown argument '$bad'; see --help")
         sys.exit(1)
       case Nil => o
     }
-    val opts = loop(args, Options())
+    val opts =
+      try loop(args, Options())
+      catch {
+        case _: NumberFormatException =>
+          println("a numeric flag got a non-numeric value; see --help")
+          sys.exit(1)
+          Options()
+      }
+    if (opts.forks.exists(_ < 1)) {
+      println("--forks must be at least 1")
+      sys.exit(1)
+    }
+    if (opts.warmupSeconds < 0 || opts.measureSeconds < 0) {
+      println("--warmup-seconds and --measure-seconds must not be negative")
+      sys.exit(1)
+    }
     if (opts.profile && opts.writeResults) {
       println("--profile cannot be combined with --write-results: profiled numbers must not become the baseline")
       sys.exit(1)
@@ -248,11 +343,13 @@ private[bench] object ResultsLog {
 
 private[bench] object Report {
 
-  /** One log row per result, each carrying its own date, commit, JVM and CPU. */
+  /** One log row per result: the median across forks and its min–max range, each carrying its own date, commit, JVM and
+    * CPU.
+    */
   def rows(results: List[WorkloadResult], date: String, commit: String): String =
     results
       .map { r =>
-        f"| $date | $commit | ${r.workload} | ${r.iterations} | ${r.edgesPerSecond}%.0f | ${r.nsPerEdge}%.1f | ${MachineInfo.jvm} | ${MachineInfo.cpu} |"
+        f"| $date | $commit | ${r.workload} | ${r.forks.size} | ${r.medianNsPerEdge}%.1f | ${r.minNsPerEdge}%.1f | ${r.maxNsPerEdge}%.1f | ${r.edgesPerSecond}%.0f | ${MachineInfo.jvm} | ${MachineInfo.cpu} |"
       }
       .mkString("", "\n", "\n")
 
@@ -261,14 +358,14 @@ private[bench] object Report {
     sb.append("machine:\n")
     MachineInfo.describe.linesIterator.foreach(l => sb.append(s"  $l\n"))
     sb.append(
-      f"${"workload"}%-10s ${"iters"}%5s ${"edges"}%12s ${"wall s"}%8s ${"edges/s"}%12s ${"ns/edge"}%9s"
+      f"${"workload"}%-10s ${"forks"}%5s ${"median ns/edge"}%14s ${"min"}%12s ${"max"}%12s ${"edges/s"}%12s"
     )
     if (opts.profile) sb.append(f" ${"ev/edge"}%9s ${"ns/ev"}%9s")
     sb.append("\n")
     results.foreach { r =>
       sb.append(
-        f"${r.workload}%-10s ${r.iterations}%5d ${r.totalEdges}%12d ${r.wallNs / 1e9}%8.2f " +
-          f"${r.edgesPerSecond}%12.0f ${r.nsPerEdge}%9.1f"
+        f"${r.workload}%-10s ${r.forks.size}%5d ${r.medianNsPerEdge}%14.1f ${r.minNsPerEdge}%12.1f ${r.maxNsPerEdge}%12.1f " +
+          f"${r.edgesPerSecond}%12.0f"
       )
       if (opts.profile) sb.append(f" ${r.transitionsPerEdge}%9.1f ${r.nsPerTransition}%9.1f")
       sb.append("\n")
