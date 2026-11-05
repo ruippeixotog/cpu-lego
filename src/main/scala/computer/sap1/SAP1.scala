@@ -25,22 +25,28 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
 
   val index = Index(comp)
 
-  private val conf = Config.default
-  private val circuit = Circuit(comp)
+  val conf: Config = Config.default
+
+  /** The gate-level circuit, exposed for engine-native drivers (e.g. benchmarks) that drive the [[Engine]] directly
+    * instead of the wall-clock paced [[Sim]].
+    */
+  val circuit: Circuit = Circuit(comp)
 
   // The demo paces the reference simulator well above real time, so that a
   // derived wall-clock phase bound comfortably covers gate propagation.
   private val ticksPerSecond = 100000
 
-  /** Conservative hardware-style phase bound: every combinational path settles within (components + wires + 1)
-    * gate/wire delays of its inputs changing, so holding one bound guarantees the previous drive has propagated
-    * everywhere. In wall-clock milliseconds, through the simulator's pace. The short-circuit tolerance is excluded: it
-    * only governs multi-driver conflicts, not propagation.
+  /** Conservative hardware-style phase bound, in simulation ticks: every combinational path settles within (components
+    * + wires + 1) gate/wire delays of its inputs changing, so holding one bound guarantees the previous drive has
+    * propagated everywhere. The short-circuit tolerance is excluded: it only governs multi-driver conflicts, not
+    * propagation. Exposed for engine-native drivers (e.g. benchmarks) that cannot use the wall-clock paced [[Sim]]
+    * protocol.
     */
-  val phaseBoundMs: Long = {
-    val ticks = (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
-    (ticks * 1000 + ticksPerSecond - 1) / ticksPerSecond
-  }
+  val phaseBoundTicks: Long =
+    (circuit.components.size + circuit.wires.size + 1).toLong * math.max(conf.gateDelay, conf.wireDelay)
+
+  /** The same conservative bound as [[phaseBoundTicks]], in wall-clock milliseconds through the simulator's pace. */
+  val phaseBoundMs: Long = (phaseBoundTicks * 1000 + ticksPerSecond - 1) / ticksPerSecond
 
   private val clkOut = index.ports("sap1.clock.out")
   private val ringOut = index.buses("sap1.sequencer.ringCounter.out")
@@ -133,11 +139,10 @@ case class SAP1(prog: List[MemEntry], debug: Boolean = false) {
   }
 }
 
-object SAP1App extends App {
-  given ExecutionContext = ExecutionContext.global
+object SAP1 {
 
-  // 10 + 14 + 18 - 20 = 22
-  val prog: List[MemEntry] = List(
+  /** The demo program, shared by the app and engine-native drivers: 10 + 14 + 18 - 20 = 22. */
+  val demoProg: List[MemEntry] = List(
     LDA(9),
     ADD(10),
     ADD(11),
@@ -152,7 +157,11 @@ object SAP1App extends App {
     Data(18),
     Data(20)
   )
+}
 
-  val sap1 = SAP1(prog, debug = true)
+object SAP1App extends App {
+  given ExecutionContext = ExecutionContext.global
+
+  val sap1 = SAP1(SAP1.demoProg, debug = true)
   println(Await.result(sap1.run, Duration.Inf).get(sap1.out).render("out: %i"))
 }
