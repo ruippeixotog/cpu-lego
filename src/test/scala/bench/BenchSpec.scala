@@ -60,17 +60,20 @@ class BenchSpec extends BaseSpec {
 
   "Bench.runForked" should {
     "aggregate fresh JVMs into a median and range" in {
-      // Under Test / fork := false this spec runs inside sbt's JVM, whose java.class.path holds sbt's own
-      // jars, not the project classes — so the fork classpath comes from this class's loader chain instead
-      // (project entries first, parent loaders after).
+      // The fork classpath is this class's loader chain (project entries first) plus this JVM's
+      // java.class.path: in a forked test JVM the system loader is not a URLClassLoader, so the
+      // chain yields nothing and java.class.path — the full test classpath there — carries the
+      // project classes; inside sbt's JVM java.class.path holds sbt's own jars, so the loader
+      // chain comes first and sbt's entries can only add, never shadow, project classes.
       def loaderUrls(cl: ClassLoader): Seq[java.net.URL] = cl match {
         case null => Seq.empty
         case u: java.net.URLClassLoader => u.getURLs.toSeq ++ loaderUrls(u.getParent)
         case other => loaderUrls(other.getParent)
       }
-      val classpath = loaderUrls(getClass.getClassLoader)
-        .map(u => java.nio.file.Paths.get(u.toURI).toString)
-        .mkString(java.io.File.pathSeparator)
+      val classpath = (
+        loaderUrls(getClass.getClassLoader).map(u => java.nio.file.Paths.get(u.toURI).toString)
+          ++ sys.props("java.class.path").split(java.io.File.pathSeparator).toSeq
+      ).distinct.mkString(java.io.File.pathSeparator)
       val result = Bench.runForked(
         Sap1Workload,
         Bench.Options(forks = Some(2), warmupSeconds = 0.05, measureSeconds = 0.1),
